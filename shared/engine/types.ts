@@ -4,7 +4,7 @@ export type Source =
   | 'verified' // official public record
   | 'listing' // stated in the listing the user supplied
   | 'estimate' // derived by a disclosed method (HUD rents, income approach, tax rate × price…)
-  | 'default'; // a course / workbook rule of thumb
+  | 'default'; // a standard underwriting assumption
 
 export interface Sourced<T> {
   value: T;

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { amortizeByYear, analyzeDeal, monthlyPayment } from '../shared/engine/engine';
 import { checks, solve, withPrice } from '../shared/engine/solver';
-import { COURSE_TARGETS } from '../shared/engine/defaults';
+import { TARGETS } from '../shared/engine/defaults';
 import type { DealInputs } from '../shared/engine/types';
 
 const zero = { lawnSnow: 0, waterSewerTrash: 0, electricGas: 0 };
 
-/** The worked example from the course videos / the workbook's sample inputs. */
+/** The workbook's sample inputs. */
 export const workbookExample: DealInputs = {
   purchasePrice: 100000,
   closingCosts: 2000,
@@ -100,12 +100,12 @@ describe('screens and solver', () => {
   const links = { closingCostPct: 0.02, stabilizedTaxRateOnPrice: null, insurancePctOfCoverage: null, taxBump: 0.1 };
 
   it('worked example passes DSCR and $/unit but misses 10% cash-on-cash', () => {
-    const c = Object.fromEntries(checks(analyzeDeal(workbookExample), COURSE_TARGETS).map((x) => [x.id, x.pass]));
+    const c = Object.fromEntries(checks(analyzeDeal(workbookExample), TARGETS).map((x) => [x.id, x.pass]));
     expect(c).toMatchObject({ dscr: true, cashflow: true, coc: false, rule75: true });
   });
 
   it('max price meets all operating targets and $1k more does not', () => {
-    const s = solve(workbookExample, links, COURSE_TARGETS);
+    const s = solve(workbookExample, links, TARGETS);
     expect(s.maxPrice).not.toBeNull();
     const at = analyzeDeal(withPrice(workbookExample, s.maxPrice!, links)).stabilized;
     expect(at.dscr).toBeGreaterThanOrEqual(1.2);
@@ -116,7 +116,7 @@ describe('screens and solver', () => {
   });
 
   it('required rent is just enough', () => {
-    const s = solve(workbookExample, links, COURSE_TARGETS);
+    const s = solve(workbookExample, links, TARGETS);
     expect(s.requiredMonthlyRent).toBeGreaterThan(1500);
     const k = s.requiredMonthlyRent! / 1500;
     const ok = analyzeDeal({
@@ -127,6 +127,6 @@ describe('screens and solver', () => {
   });
 
   it('75% rule max offer', () => {
-    expect(solve(workbookExample, links, COURSE_TARGETS).seventyFiveRuleMaxOffer).toBe(125000);
+    expect(solve(workbookExample, links, TARGETS).seventyFiveRuleMaxOffer).toBe(125000);
   });
 });

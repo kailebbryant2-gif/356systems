@@ -1,5 +1,5 @@
 {
- "note": "Anonymized closed deals underwritten by James (Multifamily Methods). Whole-building rent; unit counts not recorded. Used to check the engine reproduces his spreadsheet math.",
+ "note": "Anonymized closed St. Louis deals. Whole-building rent; unit counts not recorded. Used to check the engine reproduces his spreadsheet math.",
  "deals": [
   {
    "id": "deal-01",

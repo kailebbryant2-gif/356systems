@@ -1,4 +1,4 @@
-import { COURSE } from '../engine/defaults';
+import { DEFAULTS } from '../engine/defaults';
 
 export type RehabScope = 'renovated' | 'cosmetic' | 'substantial' | 'gut' | 'unknown';
 
@@ -18,7 +18,7 @@ export interface RehabEstimate {
 }
 
 /**
- * Keyword screen of the listing's own words, mapped onto James's course bands
+ * Keyword screen of the listing's own words, mapped onto standard rehab bands
  * ($30 cosmetic / $50 cosmetic + electrical & plumbing / $75 gut).
  * This is a screening estimate, not a bid or an inspection.
  */
@@ -29,7 +29,7 @@ export function estimateRehab(listingText: string, sqft: number, opts: { occupie
   const sub = hit(SUBSTANTIAL);
   const cos = hit(COSMETIC);
   const ren = hit(RENOVATED);
-  const b = COURSE.rehabPerSqft;
+  const b = DEFAULTS.rehabPerSqft;
 
   let scope: RehabScope;
   let matched: string | null;
@@ -49,12 +49,12 @@ export function estimateRehab(listingText: string, sqft: number, opts: { occupie
   const [perSqft, lo, hi] = band[scope];
   const notes: Record<RehabScope, string> = {
     renovated: 'Listing describes the property as renovated, so no rehab is modeled. Verify at inspection.',
-    cosmetic: 'Listing language suggests cosmetic work: course rule $30/sq ft.',
-    substantial: 'Listing language suggests substantial work: course rule $50/sq ft (does not prove electrical/plumbing issues).',
-    gut: 'Listing language suggests a gut rehab: course rule $75/sq ft.',
+    cosmetic: 'Listing language suggests cosmetic work: $30/sq ft.',
+    substantial: 'Listing language suggests substantial work: $50/sq ft (cosmetic plus electrical/plumbing; not proof of those issues).',
+    gut: 'Listing language suggests a gut rehab: $75/sq ft.',
     unknown: opts.occupied
-      ? 'Rent-producing building and the listing doesn’t describe any needed work, so no rehab is modeled (James’s closed operating deals carried none). Range shown up to the $30/sq ft cosmetic band; confirm at inspection.'
-      : 'Condition not stated in the listing: middle course band ($50/sq ft) with a $30–$75 range.',
+      ? 'Rent-producing building and the listing doesn’t describe any needed work, so no rehab is modeled. Range shown up to the $30/sq ft cosmetic band; confirm at inspection.'
+      : 'Condition not stated in the listing: middle band ($50/sq ft) with a $30–$75 range.',
   };
   return {
     scope,

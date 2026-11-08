@@ -6,7 +6,7 @@ export interface PriceLinks {
   closingCostPct: number;
   /** If taxes were estimated from the price, the rate used; null when taxes come from a fixed bill. */
   stabilizedTaxRateOnPrice: number | null;
-  /** Course reassessment bump applied to the current tax bill (0.10). */
+  /** Reassessment bump applied to the current tax bill (0.10). */
   taxBump: number;
   /** If insurance = pct × (price + rehab); null when insurance is a fixed figure. */
   insurancePctOfCoverage: number | null;
@@ -102,7 +102,7 @@ export interface Solutions {
   /** Down payment % needed for DSCR and $/unit cash flow at the entered price (cash-on-cash shown separately). */
   requiredDownPct: number | null;
   requiredDownCash: number | null;
-  /** Course 75% rule: 75% × ARV − rehab. */
+  /** 75% rule: 75% × ARV − rehab. */
   seventyFiveRuleMaxOffer: number;
   /** Which screen limits the price the most at the entered price. */
   bindingConstraint: 'dscr' | 'cashflow' | 'coc' | null;

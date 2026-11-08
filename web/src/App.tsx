@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Analysis } from '../../shared/resolve';
 import type { Source } from '../../shared/engine/types';
 import { money, pct, ratio } from './format';
@@ -8,12 +8,36 @@ const SOURCE_LABEL: Record<Source, string> = {
   verified: 'Verified',
   listing: 'Listing',
   estimate: 'Estimate',
-  default: 'Course rule',
+  default: 'Assumption',
 };
 
 function Tag({ source }: { source: Source }) {
   return <span className={`tag tag-${source}`}>{SOURCE_LABEL[source]}</span>;
 }
+
+// ---------------- Icons ----------------
+
+const Icon = ({ d, size = 18 }: { d: ReactNode; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    {d}
+  </svg>
+);
+const IconPin = () => <Icon d={<><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></>} />;
+const IconDollar = () => <Icon d={<><path d="M12 3v18" /><path d="M16.5 7.5c-.8-1.3-2.4-2-4.5-2-2.6 0-4 1.3-4 3s1.6 2.5 4 3 4 1.4 4 3.2-1.5 3.3-4.2 3.3c-2 0-3.7-.8-4.6-2.2" /></>} />;
+const IconLink = () => <Icon d={<><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>} />;
+const IconArrow = () => <Icon d={<><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></>} />;
+const IconCheck = () => <Icon size={16} d={<path d="M5 12.5l4.5 4.5L19 7.5" />} />;
+const IconTag = () => <Icon d={<><path d="M3 12V4h8l10 10-8 8z" /><circle cx="7.5" cy="8.5" r="1.3" /></>} />;
+const IconHome = () => <Icon d={<><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-5h4v5" /></>} />;
+const IconBank = () => <Icon d={<><path d="M3 9l9-5 9 5" /><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8" /><path d="M3 20h18" /></>} />;
+const IconRuler = () => <Icon d={<><path d="M4 16L16 4l4 4L8 20z" /><path d="M8 12l2 2M11 9l2 2M14 6l2 2" /></>} />;
+
+const ARROW_LOGO = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M4 17l6-6 4 4 6-7" />
+    <path d="M15 8h5v5" />
+  </svg>
+);
 
 // ---------------- Form ----------------
 
@@ -53,12 +77,13 @@ function AddressInput({ value, onChange }: { value: string; onChange: (v: string
   };
 
   return (
-    <div className="combo">
+    <div className="combo field">
+      <span className="field-icon"><IconPin /></span>
       <input
         id="address"
         className="input"
         autoComplete="off"
-        placeholder="123 Main St, St. Louis, MO"
+        placeholder="4321 Arsenal St, St. Louis, MO"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => items.length && setOpen(true)}
@@ -84,7 +109,7 @@ function AddressInput({ value, onChange }: { value: string; onChange: (v: string
               className={i === active ? 'active' : ''}
               onMouseDown={(e) => { e.preventDefault(); pick(s); }}
             >
-              {s}
+              <IconPin /> <span>{s}</span>
             </li>
           ))}
         </ul>
@@ -93,75 +118,174 @@ function AddressInput({ value, onChange }: { value: string; onChange: (v: string
   );
 }
 
-function PriceInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+// ---------------- Results ----------------
+
+const reveal = (i: number) => ({ '--d': i } as CSSProperties);
+
+function ScoreRing({ passed, total, good }: { passed: number; total: number; good: boolean }) {
+  const r = 38;
+  const c = 2 * Math.PI * r;
   return (
-    <div className="price">
-      <span>$</span>
-      <input
-        id="price"
-        className="input"
-        inputMode="numeric"
-        placeholder="250,000"
-        value={value}
-        onChange={(e) => {
-          const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 9);
-          onChange(digits ? Number(digits).toLocaleString('en-US') : '');
-        }}
-      />
+    <div className={`ring ${good ? 'ring-good' : 'ring-bad'}`} role="img" aria-label={`${passed} of ${total} tests passed`}>
+      <svg viewBox="0 0 96 96" width="96" height="96">
+        <circle cx="48" cy="48" r={r} className="ring-track" />
+        <circle
+          cx="48"
+          cy="48"
+          r={r}
+          className="ring-value"
+          strokeDasharray={c}
+          style={{ '--off': c * (1 - passed / total), '--full': c } as CSSProperties}
+          transform="rotate(-90 48 48)"
+        />
+      </svg>
+      <div className="ring-label">
+        <strong>{passed}/{total}</strong>
+        <span>tests</span>
+      </div>
     </div>
   );
 }
 
-// ---------------- Results ----------------
-
 function Verdict({ a }: { a: Analysis }) {
   const s = a.verdict.status;
+  const passed = a.checks.filter((c) => c.pass).length;
   return (
-    <section className={`card verdict verdict-${s}`}>
-      <div className="verdict-top">
-        <span className={`badge badge-${s}`}>{s === 'meets' ? 'Meets targets' : s === 'misses' ? 'Below targets' : 'Needs rent data'}</span>
-        <span className={`confidence confidence-${a.verdict.confidence}`} title={a.verdict.confidenceReasons.join(' · ')}>
-          {a.verdict.confidence} confidence
-        </span>
+    <section className={`card verdict verdict-${s} reveal`} style={reveal(0)}>
+      <div className="verdict-head">
+        <ScoreRing passed={passed} total={a.checks.length} good={s === 'meets'} />
+        <div className="verdict-text">
+          <div className="verdict-top">
+            <span className={`badge badge-${s}`}>{s === 'meets' ? 'Meets targets' : s === 'misses' ? 'Below targets' : 'Needs rent data'}</span>
+            <span className={`confidence confidence-${a.verdict.confidence}`} title={a.verdict.confidenceReasons.join(' · ')}>
+              {a.verdict.confidence} confidence
+            </span>
+          </div>
+          <h2>{a.verdict.headline}</h2>
+          <p className="muted">
+            {a.address.matched} · {money(a.purchasePrice)}
+          </p>
+        </div>
       </div>
-      <h2>{a.verdict.headline}</h2>
-      <p className="muted">
-        {a.address.matched} · {a.address.county} · {money(a.purchasePrice)}
-      </p>
       <div className="checks">
         {a.checks.map((c) => (
           <div key={c.id} className={`check ${c.pass ? 'pass' : 'fail'}`}>
-            <span className="dot" aria-hidden />
+            <span className="check-icon" aria-hidden>{c.pass ? <IconCheck /> : '!'}</span>
             <span className="check-label">{c.label}</span>
             <span className="check-val">{c.actual}</span>
-            <span className="check-target">{c.target}</span>
+            <span className="check-target">target {c.target}</span>
           </div>
         ))}
       </div>
       {a.verdict.confidenceReasons.length > 0 && (
-        <p className="fine">Lower confidence because: {a.verdict.confidenceReasons.join(' · ')}.</p>
+        <p className="fine">Confidence is {a.verdict.confidence} because: {a.verdict.confidenceReasons.join(' · ')}.</p>
       )}
     </section>
   );
 }
 
+function Meter({ value, target, max }: { value: number; target: number; max: number }) {
+  const fill = Math.max(0, Math.min(value / max, 1));
+  return (
+    <div className="meter" aria-hidden>
+      <span className={`meter-fill ${value >= target ? 'ok' : 'low'}`} style={{ '--w': fill } as CSSProperties} />
+      <span className="meter-target" style={{ left: `${(target / max) * 100}%` }} />
+    </div>
+  );
+}
+
 function Kpis({ a }: { a: Analysis }) {
   const s = a.result.stabilized;
-  const items = [
-    { label: 'Monthly cash flow', value: money(s.cashFlow / 12), sub: `${money(s.cashFlowPerUnitMonthly)} per unit` },
-    { label: 'Cash-on-cash', value: pct(s.cashOnCash), sub: 'Stabilized, year 1' },
-    { label: 'DSCR', value: ratio(s.dscr), sub: 'Lenders want 1.20+' },
-    { label: 'Cash to close', value: money(a.result.acquisition.cashInvested), sub: 'Down + closing + rehab' },
+  const known = a.rentKnown;
+  const tiles = [
+    {
+      label: 'Monthly cash flow',
+      value: known ? money(s.cashFlow / 12) : '—',
+      sub: `${money(s.cashFlowPerUnitMonthly)}/unit · target $150`,
+      meter: known && <Meter value={s.cashFlowPerUnitMonthly} target={150} max={225} />,
+    },
+    {
+      label: 'Cash-on-cash',
+      value: known ? pct(s.cashOnCash) : '—',
+      sub: 'target 10%',
+      meter: known && <Meter value={s.cashOnCash} target={0.1} max={0.15} />,
+    },
+    {
+      label: 'DSCR',
+      value: known ? ratio(s.dscr) : '—',
+      sub: 'lenders want 1.20+',
+      meter: known && <Meter value={s.dscr} target={1.2} max={1.8} />,
+    },
+    {
+      label: 'Cash to close',
+      value: money(a.result.acquisition.cashInvested),
+      sub: a.rehab.cost > 0 ? `incl. ${money(a.rehab.cost)} rehab` : 'down + closing',
+      meter: null,
+    },
   ];
   return (
     <section className="kpis">
-      {items.map((k) => (
-        <div key={k.label} className="kpi">
+      {tiles.map((k, i) => (
+        <div key={k.label} className="kpi reveal" style={reveal(i + 1)}>
           <div className="kpi-label">{k.label}</div>
-          <div className="kpi-value">{a.rentKnown || k.label === 'Cash to close' ? k.value : '—'}</div>
+          <div className="kpi-value">{k.value}</div>
+          {k.meter}
           <div className="kpi-sub">{k.sub}</div>
         </div>
       ))}
+    </section>
+  );
+}
+
+const SEGMENTS = [
+  { key: 'vacancy', label: 'Vacancy', color: '#c9801a' },
+  { key: 'expenses', label: 'Operating expenses', color: '#3d76d9' },
+  { key: 'mortgage', label: 'Mortgage', color: '#a03c87' },
+  { key: 'cashflow', label: 'Cash flow', color: '#25935a' },
+] as const;
+
+function RentBreakdown({ a }: { a: Analysis }) {
+  const s = a.result.stabilized;
+  if (!a.rentKnown || s.grossPotentialIncome <= 0) return null;
+  const m = (x: number) => x / 12;
+  const values = {
+    vacancy: m(s.vacancy),
+    expenses: m(s.operatingExpenses),
+    mortgage: m(s.debtService),
+    cashflow: Math.max(m(s.cashFlow), 0),
+  };
+  const total = Object.values(values).reduce((x, y) => x + y, 0);
+  const shortfall = s.cashFlow < 0 ? -m(s.cashFlow) : 0;
+  return (
+    <section className="card reveal" style={reveal(5)}>
+      <div className="card-head">
+        <h3>Where the rent goes</h3>
+        <span className="muted small">{money(m(s.grossPotentialIncome))}/mo stabilized rent</span>
+      </div>
+      <div className="stack" role="img" aria-label="Monthly rent split into vacancy, operating expenses, mortgage and cash flow">
+        {SEGMENTS.map((g) =>
+          values[g.key] > 0 ? (
+            <span
+              key={g.key}
+              className="stack-seg"
+              style={{ flexGrow: values[g.key], background: g.color }}
+              title={`${g.label}: ${money(values[g.key])}/mo (${pct(values[g.key] / total, 0)})`}
+            />
+          ) : null,
+        )}
+      </div>
+      <ul className="legend">
+        {SEGMENTS.map((g) => (
+          <li key={g.key}>
+            <span className="swatch" style={{ background: g.color }} />
+            <span className="legend-label">{g.label}</span>
+            <span className="legend-val">{money(values[g.key])}</span>
+          </li>
+        ))}
+      </ul>
+      {shortfall > 0 && (
+        <p className="shortfall">Rent doesn’t cover everything: you’d add {money(shortfall)}/mo out of pocket.</p>
+      )}
     </section>
   );
 }
@@ -170,52 +294,57 @@ function MakeItWork({ a }: { a: Analysis }) {
   const sol = a.solutions;
   const rent = a.result.stabilized.grossPotentialIncome / 12;
   const units = a.result.acquisition.purchasePrice / a.result.acquisition.pricePerUnit;
-  const rows = [
+  const tiles = [
     {
+      icon: <IconTag />,
       title: 'Price that works',
-      value: sol.maxPrice ? money(sol.maxPrice) : 'None at these rents',
+      value: sol.maxPrice ? money(sol.maxPrice) : 'None',
       text: sol.maxPrice
         ? sol.maxPrice >= a.purchasePrice
-          ? `You have room: the targets still pass up to ${money(sol.maxPrice)}.`
-          : `${money(a.purchasePrice - sol.maxPrice)} below your price. Highest price where DSCR, cash flow and cash-on-cash all pass.`
-        : 'No price meets all three cash-flow targets at these rents and terms.',
+          ? `Room to spare: targets still pass up to ${money(sol.maxPrice)}.`
+          : `${money(a.purchasePrice - sol.maxPrice)} below your price.`
+        : 'No price clears all three at these rents and terms.',
     },
     {
+      icon: <IconHome />,
       title: 'Rent it needs',
-      value: sol.requiredMonthlyRent ? `${money(sol.requiredMonthlyRent)}/mo` : '—',
+      value: sol.requiredMonthlyRent ? `${money(sol.requiredMonthlyRent)}` : '—',
       text: sol.requiredMonthlyRent
-        ? `${money(sol.requiredMonthlyRent / units)} per unit${a.rentKnown ? ` vs ${money(rent / units)} modeled` : ''}. Check this against rental comps.`
+        ? `${money(sol.requiredMonthlyRent / units)}/unit${a.rentKnown ? ` vs ${money(rent / units)} modeled` : ''}.`
         : 'Not solvable at this price.',
     },
     {
+      icon: <IconBank />,
       title: 'Down payment it needs',
       value: sol.requiredDownPct !== null ? pct(sol.requiredDownPct, 0) : '—',
       text:
         sol.requiredDownPct !== null && sol.requiredDownCash !== null
-          ? `${money(sol.requiredDownCash)} down gets DSCR and cash flow to target. More cash in lowers your cash-on-cash.`
-          : 'Even all cash wouldn’t clear the targets at these rents.',
+          ? `${money(sol.requiredDownCash)} down fixes DSCR and cash flow.`
+          : 'Even all cash wouldn’t clear the targets.',
     },
     {
+      icon: <IconRuler />,
       title: '75% rule offer',
       value: money(Math.max(sol.seventyFiveRuleMaxOffer, 0)),
-      text: 'Course rule: price + rehab ≤ 75% of ARV. ARV here is an income-based estimate.',
+      text: 'Price + rehab ≤ 75% of after-repair value.',
     },
   ];
   return (
-    <section className="card">
-      <h3>What would make it work</h3>
-      <div className="solve">
-        {rows.map((r) => (
-          <div key={r.title} className="solve-row">
-            <div>
-              <div className="solve-title">{r.title}</div>
-              <div className="solve-text">{r.text}</div>
-            </div>
-            <div className="solve-value">{r.value}</div>
+    <section className="reveal" style={reveal(6)}>
+      <div className="section-title">
+        <h3>What would make it work</h3>
+        <p className="muted small">Math thresholds under these assumptions, not what a seller or lender will accept.</p>
+      </div>
+      <div className="solve-grid">
+        {tiles.map((t) => (
+          <div key={t.title} className="solve-tile">
+            <span className="solve-icon">{t.icon}</span>
+            <div className="solve-title">{t.title}</div>
+            <div className="solve-value">{t.value}</div>
+            <div className="solve-text">{t.text}</div>
           </div>
         ))}
       </div>
-      <p className="fine">These are math thresholds under the assumptions below, not what a seller, lender or the market will accept.</p>
     </section>
   );
 }
@@ -228,6 +357,7 @@ function Statement({ a }: { a: Analysis }) {
   const c = a.result.current;
   const s = a.result.stabilized;
   const ls = a.lineSources;
+  const uniq = (xs: Source[]) => xs.filter((x, i) => xs.indexOf(x) === i);
   const line = (label: string, cur: number, stab: number, src: Source | Source[], opts: { neg?: boolean; strong?: boolean } = {}) => {
     const srcs = Array.isArray(src) ? src : [src];
     return (
@@ -241,7 +371,7 @@ function Statement({ a }: { a: Analysis }) {
     );
   };
   return (
-    <details className="card section" open>
+    <details className="card section reveal" style={reveal(7)} open>
       <summary>
         <h3>Income, expenses &amp; cash flow</h3>
       </summary>
@@ -262,10 +392,10 @@ function Statement({ a }: { a: Analysis }) {
             </tr>
           </thead>
           <tbody>
-            {line('Gross rent', c.grossPotentialIncome, s.grossPotentialIncome, [ls.gpiCurrent, ls.gpiStabilized].filter((x, i, arr) => arr.indexOf(x) === i) as Source[])}
+            {line('Gross rent', c.grossPotentialIncome, s.grossPotentialIncome, uniq([ls.gpiCurrent, ls.gpiStabilized]))}
             {line('Vacancy', c.vacancy, s.vacancy, ls.vacancy, { neg: true })}
             {line('Effective income', c.effectiveIncome, s.effectiveIncome, [], { strong: true })}
-            {line('Property taxes', c.taxes, s.taxes, [ls.taxesCurrent, ls.taxesStabilized].filter((x, i, arr) => arr.indexOf(x) === i) as Source[], { neg: true })}
+            {line('Property taxes', c.taxes, s.taxes, uniq([ls.taxesCurrent, ls.taxesStabilized]), { neg: true })}
             {line('Insurance', c.insurance, s.insurance, ls.insurance, { neg: true })}
             {line('Management', c.management, s.management, ls.management, { neg: true })}
             {line('Maintenance', c.maintenance, s.maintenance, ls.maintenance, { neg: true })}
@@ -296,7 +426,7 @@ function Statement({ a }: { a: Analysis }) {
         </table>
       </div>
       <p className="fine">
-        Current = today’s rent (or the benchmark when the listing doesn’t state rent). Stabilized = after the rehab, at market rent with
+        Current = today’s rent (or the benchmark when the listing doesn’t state rent). Stabilized = after any rehab, at market rent with
         taxes reassessed.
       </p>
     </details>
@@ -309,7 +439,7 @@ function Acquisition({ a }: { a: Analysis }) {
     ['Purchase price', money(q.purchasePrice), 'user'],
     ['Price per unit', money(q.pricePerUnit), null],
     ['Closing costs', money(q.closingCosts), 'default'],
-    ['Down payment', `${money(q.downPayment)} (${pct(1 - (q.loanAmount - q.rehabFinanced) / q.purchasePrice, 0)})`, 'default'],
+    ['Down payment', `${money(q.downPayment)} (${pct(q.downPayment / q.purchasePrice, 0)})`, 'default'],
     ['Loan amount', money(q.loanAmount), null],
     ['Monthly payment (P&I)', money(q.monthlyPayment), 'default'],
     ['Rehab budget', `${money(a.rehab.cost)} · ${a.rehab.scope === 'unknown' ? 'condition unknown' : a.rehab.scope}`, a.lineSources.rehab],
@@ -320,7 +450,7 @@ function Acquisition({ a }: { a: Analysis }) {
     ['Yield on cost', pct(q.yieldOnCost), null],
   ];
   return (
-    <details className="card section">
+    <details className="card section reveal" style={reveal(8)}>
       <summary>
         <h3>Purchase, financing &amp; rehab</h3>
       </summary>
@@ -335,8 +465,8 @@ function Acquisition({ a }: { a: Analysis }) {
         ))}
       </dl>
       <p className="fine">
-        Forced appreciation = ARV − price − closing − rehab. Yield on cost = stabilized NOI ÷ all-in cost. Rehab uses James’s $30 / $50 / $75
-        per sq ft bands. It’s a screening estimate, not a contractor bid.
+        Forced appreciation = ARV − price − closing − rehab. Yield on cost = stabilized NOI ÷ all-in cost. Rehab uses $30 / $50 / $75 per sq ft
+        bands for cosmetic / substantial / gut work. It’s a screening estimate, not a contractor bid.
       </p>
     </details>
   );
@@ -353,7 +483,7 @@ function Returns({ a }: { a: Analysis }) {
     </tr>
   );
   return (
-    <details className="card section">
+    <details className="card section reveal" style={reveal(9)}>
       <summary>
         <h3>5-year returns</h3>
       </summary>
@@ -382,8 +512,8 @@ function Returns({ a }: { a: Analysis }) {
       </div>
       <p className="fine">
         Only cash flow is cash in your pocket. Paydown and appreciation build equity you can’t spend until you sell or refinance. Year 1
-        includes one-time forced appreciation. Tax effect = −(NOI − interest − depreciation) × 25%. A negative number means tax owed. Passive-loss
-        rules and depreciation recapture can change this, so ask a CPA.
+        includes one-time forced appreciation. Tax effect = −(NOI − interest − depreciation) × 25%; a negative number means tax owed.
+        Passive-loss rules and depreciation recapture can change this, so ask a CPA.
       </p>
     </details>
   );
@@ -391,7 +521,7 @@ function Returns({ a }: { a: Analysis }) {
 
 function Assumptions({ a }: { a: Analysis }) {
   return (
-    <details className="card section">
+    <details className="card section reveal" style={reveal(10)}>
       <summary>
         <h3>Where every number comes from</h3>
       </summary>
@@ -418,7 +548,7 @@ function Assumptions({ a }: { a: Analysis }) {
 
 // ---------------- App ----------------
 
-const STEPS = ['Finding the property', 'Reading the listing', 'Pulling HUD market rents', 'Estimating taxes & rehab', 'Running the underwriting'];
+const STEPS = ['Finding the property', 'Reading the listing', 'Pulling market rents', 'Estimating taxes & rehab', 'Running the numbers'];
 
 export function App() {
   const [address, setAddress] = useState('');
@@ -463,69 +593,121 @@ export function App() {
   };
 
   return (
-    <div className="page">
-      <header className="top">
-        <div className="logo">
-          <span className="logo-mark" aria-hidden>◆</span> Dealwise
-        </div>
-        <div className="by">by Multifamily Methods</div>
-      </header>
-
-      <main>
-        <section className="hero">
-          <h1>Does this deal work?</h1>
-          <p>Enter a property and price. We run James’s underwriting and show you what it would take to hit the targets.</p>
-        </section>
-
-        <form className="card form" onSubmit={submit} noValidate>
-          <label htmlFor="address">Property address</label>
-          <AddressInput value={address} onChange={setAddress} />
-          <label htmlFor="price">Purchase price</label>
-          <PriceInput value={price} onChange={setPrice} />
-          <label htmlFor="link">
-            Listing link <span className="opt">with photos</span>
-          </label>
-          <input
-            id="link"
-            className="input"
-            type="url"
-            inputMode="url"
-            placeholder="https://…"
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-          />
-          <button className="btn" type="submit" disabled={loading}>
-            {loading ? STEPS[step] + '…' : 'Analyze property'}
-          </button>
-          {error && <p className="error" role="alert">{error}</p>}
-        </form>
-
-        {result && (
-          <div className="results" ref={resultsRef}>
-            <Verdict a={result} />
-            <Kpis a={result} />
-            <MakeItWork a={result} />
-            {result.warnings.length > 0 && (
-              <section className="card notes">
-                <h3>Heads up</h3>
-                <ul>
-                  {result.warnings.map((w) => (
-                    <li key={w}>{w}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            <Statement a={result} />
-            <Acquisition a={result} />
-            <Returns a={result} />
-            <Assumptions a={result} />
-            <p className="disclaimer">
-              Educational screening estimate based on the Multifamily Methods course rules and free public data (HUD Fair Market Rents, US
-              Census). Not an appraisal, inspection, loan approval, or tax advice. Verify rents, taxes, insurance and rehab before you offer.
-            </p>
+    <div className="shell">
+      <div className="glow" aria-hidden />
+      <div className="page">
+        <header className="top">
+          <div className="logo">
+            <span className="logo-mark">{ARROW_LOGO}</span> Dealwise
           </div>
-        )}
-      </main>
+          <div className="by">by Multifamily Methods</div>
+        </header>
+
+        <main>
+          <section className="hero">
+            <div className="eyebrow">
+              <span className="pulse" /> Free rental deal analyzer
+            </div>
+            <h1>
+              Know if a deal works <span className="hl">before you offer.</span>
+            </h1>
+            <p>Address, price and listing link in. Rent, expenses, NOI, cash flow, DSCR and the price that makes it work out.</p>
+          </section>
+
+          <form className="card form" onSubmit={submit} noValidate>
+            <label htmlFor="address">Property address</label>
+            <AddressInput value={address} onChange={setAddress} />
+            <div className="row2">
+              <div>
+                <label htmlFor="price">Purchase price</label>
+                <div className="field">
+                  <span className="field-icon"><IconDollar /></span>
+                  <input
+                    id="price"
+                    className="input"
+                    inputMode="numeric"
+                    placeholder="250,000"
+                    value={price}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 9);
+                      setPrice(digits ? Number(digits).toLocaleString('en-US') : '');
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="link">
+                  Listing link <span className="opt">with photos</span>
+                </label>
+                <div className="field">
+                  <span className="field-icon"><IconLink /></span>
+                  <input
+                    id="link"
+                    className="input"
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://…"
+                    value={link}
+                    onChange={(e) => setLink(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <button className={`btn ${loading ? 'busy' : ''}`} type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="spinner" aria-hidden /> {STEPS[step]}…
+                </>
+              ) : (
+                <>
+                  Analyze property <IconArrow />
+                </>
+              )}
+            </button>
+            {loading && (
+              <div className="progress" aria-hidden>
+                <span style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+              </div>
+            )}
+            {error && <p className="error" role="alert">{error}</p>}
+          </form>
+
+          {!result && (
+            <ul className="trust">
+              <li><IconCheck /> Full underwriting</li>
+              <li><IconCheck /> Every number sourced</li>
+              <li><IconCheck /> No sign-up</li>
+            </ul>
+          )}
+
+          {result && (
+            <div className="results" ref={resultsRef}>
+              <Verdict a={result} />
+              <Kpis a={result} />
+              <RentBreakdown a={result} />
+              <MakeItWork a={result} />
+              {result.warnings.length > 0 && (
+                <section className="card notes reveal" style={reveal(7)}>
+                  <h3>Heads up</h3>
+                  <ul>
+                    {result.warnings.map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              <Statement a={result} />
+              <Acquisition a={result} />
+              <Returns a={result} />
+              <Assumptions a={result} />
+              <p className="disclaimer">
+                Educational screening estimate based on standard underwriting assumptions and free public data (HUD Fair Market Rents, US
+                Census). Not an appraisal, inspection, loan approval or tax advice. Verify rents, taxes, insurance and rehab before you offer.
+              </p>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

@@ -3,11 +3,11 @@ import { analyzeDeal } from '../shared/engine/engine';
 import data from './fixtures/closed-deals.json';
 
 /**
- * 11 deals James underwrote and closed (anonymized). Feeding his own inputs into the engine
- * must reproduce his spreadsheet's mortgage payment and NOI, so Dealwise and his workbook agree
+ * 11 closed St. Louis deals (anonymized). Feeding the original inputs into the engine
+ * must reproduce the spreadsheet's mortgage payment and NOI, so Dealwise and the workbook agree
  * on the math and differ only in assumptions.
  */
-describe('reproduces James’s spreadsheet on his closed deals', () => {
+describe('reproduces the underwriting spreadsheet on closed deals', () => {
   for (const d of data.deals) {
     it(d.id, () => {
       const owner = { lawnSnow: d.lawnMonthly, waterSewerTrash: d.ownerUtilitiesMonthly, electricGas: 0 };

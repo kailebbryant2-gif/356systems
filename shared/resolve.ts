@@ -1,5 +1,5 @@
 import { analyzeDeal } from './engine/engine';
-import { COURSE, COURSE_TARGETS, JAMES } from './engine/defaults';
+import { DEFAULTS, TARGETS, MARKET } from './engine/defaults';
 import { checks, solve, type PriceLinks, type Solutions } from './engine/solver';
 import type { Check, DealInputs, DealResult, Source, Unit } from './engine/types';
 import type { GeocodedAddress } from './sources/geocode';
@@ -101,7 +101,7 @@ export function resolve(a: ResolveArgs): Analysis {
     }
   }
   add('units', 'Units', String(unitCount), unitsSource, unitsNote);
-  const commercial = unitCount >= JAMES.commercialMinUnits || price >= JAMES.commercialMinPrice;
+  const commercial = unitCount >= MARKET.commercialMinUnits || price >= MARKET.commercialMinPrice;
 
   const bedsPerUnit = facts?.totalBeds && unitsSource === 'listing' ? Math.max(0, Math.min(4, Math.round(facts.totalBeds / unitCount))) : 2;
   const bedsSource: Source = facts?.totalBeds ? 'listing' : 'estimate';
@@ -133,12 +133,12 @@ export function resolve(a: ResolveArgs): Analysis {
   let marketSource: Source = 'estimate';
   let marketNote = '';
   if (listedRent) {
-    const uplifted = (listedRent / unitCount) * (1 + JAMES.rentUplift.value);
+    const uplifted = (listedRent / unitCount) * (1 + MARKET.rentUplift.value);
     marketPerUnit = Math.max(uplifted, hudPerUnit);
     marketNote =
       hudPerUnit > uplifted
         ? `${hudLabel}: ${money(hudPerUnit)}. Current rent is below it, so a renovated unit is assumed to reach it.`
-        : `Current rent + 7%. ${JAMES.rentUplift.note}${hudPerUnit ? ` ${hudLabel}: ${money(hudPerUnit)}.` : ''}`;
+        : `Current rent + 7%. ${MARKET.rentUplift.note}${hudPerUnit ? ` ${hudLabel}: ${money(hudPerUnit)}.` : ''}`;
   } else if (hudPerUnit) {
     marketPerUnit = hudPerUnit;
     marketNote = `${hudLabel}. HUD sets this at the 40th percentile, including utilities, so it runs conservative.`;
@@ -179,8 +179,8 @@ export function resolve(a: ResolveArgs): Analysis {
   );
 
   // ---- Taxes ----
-  const rate = commercial ? JAMES.taxRateCommercial.value : (a.taxRate?.rate ?? null);
-  const rateNote = commercial ? JAMES.taxRateCommercial.note : (a.taxRate?.note ?? '');
+  const rate = commercial ? MARKET.taxRateCommercial.value : (a.taxRate?.rate ?? null);
+  const rateNote = commercial ? MARKET.taxRateCommercial.note : (a.taxRate?.note ?? '');
   let taxesCurrent: number;
   let taxSource: Source;
   let taxNote: string;
@@ -198,69 +198,69 @@ export function resolve(a: ResolveArgs): Analysis {
     taxNote = 'No tax data. Assumed 1% of purchase price.';
   }
   const taxRateOnPrice = rate ?? 0.01;
-  const taxesStabilized = Math.max(taxesCurrent * (1 + COURSE.taxBumpOnPurchase.value), price * taxRateOnPrice);
+  const taxesStabilized = Math.max(taxesCurrent * (1 + DEFAULTS.taxBumpOnPurchase.value), price * taxRateOnPrice);
   add('taxesCurrent', 'Property taxes (current)', `${money(taxesCurrent)}/yr`, taxSource, taxNote);
   add(
     'taxesStabilized',
     'Property taxes (after purchase)',
     `${money(taxesStabilized)}/yr`,
     'estimate',
-    `Higher of current +10% (course rule) or purchase price × ${pct(taxRateOnPrice, 2)}. A historical bill is not a forecast.`,
+    `Higher of current +10% or purchase price × ${pct(taxRateOnPrice, 2)}. A historical bill is not a forecast.`,
   );
 
-  // ---- Financing and the rest of the course defaults ----
-  const loan = commercial ? JAMES.commercialLoan : JAMES.smallLoan;
-  const mgmt = commercial ? JAMES.managementCommercial : COURSE.managementPct;
-  const insurance = (price + rehab.cost) * COURSE.insurancePctOfCoverage.value;
+  // ---- Financing and the remaining defaults ----
+  const loan = commercial ? MARKET.commercialLoan : MARKET.smallLoan;
+  const mgmt = commercial ? MARKET.managementCommercial : DEFAULTS.managementPct;
+  const insurance = (price + rehab.cost) * DEFAULTS.insurancePctOfCoverage.value;
   const owner =
     unitCount > 1
       ? {
-          lawnSnow: COURSE.lawnSnowMonthly.value,
-          waterSewerTrash: (COURSE.waterSewerTrashPer2Units.value / 2) * unitCount,
+          lawnSnow: DEFAULTS.lawnSnowMonthly.value,
+          waterSewerTrash: (DEFAULTS.waterSewerTrashPer2Units.value / 2) * unitCount,
           electricGas: 0,
         }
       : { lawnSnow: 0, waterSewerTrash: 0, electricGas: 0 };
 
   add('down', 'Down payment', pct(loan.down, 0), 'default', loan.note);
-  add('rate', 'Interest rate', pct(COURSE.interestRate.value, 1), 'default', COURSE.interestRate.note);
+  add('rate', 'Interest rate', pct(DEFAULTS.interestRate.value, 1), 'default', DEFAULTS.interestRate.note);
   add('amort', 'Amortization', `${loan.amortYears} years`, 'default', loan.note);
-  add('closing', 'Closing costs', money(price * COURSE.closingCostPct.value), 'default', COURSE.closingCostPct.note);
-  add('vacancy', 'Vacancy', pct(COURSE.vacancyPct.value, 0), 'default', COURSE.vacancyPct.note);
-  add('maintenance', 'Maintenance', pct(COURSE.maintenancePct.value, 0), 'default', COURSE.maintenancePct.note);
+  add('closing', 'Closing costs', money(price * DEFAULTS.closingCostPct.value), 'default', DEFAULTS.closingCostPct.note);
+  add('vacancy', 'Vacancy', pct(DEFAULTS.vacancyPct.value, 0), 'default', DEFAULTS.vacancyPct.note);
+  add('maintenance', 'Maintenance', pct(DEFAULTS.maintenancePct.value, 0), 'default', DEFAULTS.maintenancePct.note);
   add('management', 'Management', pct(mgmt.value, 0), 'default', mgmt.note);
-  add('insurance', 'Insurance', `${money(insurance)}/yr`, 'default', COURSE.insurancePctOfCoverage.note);
+  add('insurance', 'Insurance', `${money(insurance)}/yr`, 'default', DEFAULTS.insurancePctOfCoverage.note);
   add(
     'utilities',
     'Owner-paid utilities',
     unitCount > 1 ? `${money(owner.waterSewerTrash)}/mo water, sewer, trash · ${money(owner.lawnSnow)}/mo lawn & snow` : '$0 (tenant pays)',
     'default',
     unitCount > 1
-      ? `${COURSE.waterSewerTrashPer2Units.note} James’s multifamily deals ran 7–10% of gross rent, which this matches at typical St. Louis rents. Tenants pay electric and gas.`
-      : 'Course rule: on a single-family, the tenant pays all utilities and lawn care.',
+      ? `${DEFAULTS.waterSewerTrashPer2Units.note} Closed St. Louis multifamily deals ran 7–10% of gross rent, which this matches. Tenants pay electric and gas.`
+      : 'On a single-family, the tenant pays all utilities and lawn care.',
   );
 
   const base: DealInputs = {
     purchasePrice: price,
-    closingCosts: price * COURSE.closingCostPct.value,
+    closingCosts: price * DEFAULTS.closingCostPct.value,
     downPaymentPct: loan.down,
-    interestRate: COURSE.interestRate.value,
+    interestRate: DEFAULTS.interestRate.value,
     amortYears: loan.amortYears,
     rehabCost: rehab.cost,
-    rehabOutOfPocketPct: COURSE.rehabOutOfPocketPct.value,
+    rehabOutOfPocketPct: DEFAULTS.rehabOutOfPocketPct.value,
     arv: 0,
     units,
-    vacancyPct: COURSE.vacancyPct.value,
+    vacancyPct: DEFAULTS.vacancyPct.value,
     taxesCurrent,
     taxesStabilized,
     insurance,
     managementPct: mgmt.value,
-    maintenancePct: COURSE.maintenancePct.value,
+    maintenancePct: DEFAULTS.maintenancePct.value,
     current: owner,
     stabilized: owner,
-    buildingValueRatio: COURSE.buildingValueRatio.value,
-    marginalTaxRate: COURSE.marginalTaxRate.value,
-    appreciationPct: COURSE.appreciationPct.value,
-    holdYears: COURSE.holdYears.value,
+    buildingValueRatio: DEFAULTS.buildingValueRatio.value,
+    marginalTaxRate: DEFAULTS.marginalTaxRate.value,
+    appreciationPct: DEFAULTS.appreciationPct.value,
+    holdYears: DEFAULTS.holdYears.value,
   };
 
   // ---- ARV (income approach; no free sales comps) ----
@@ -268,13 +268,13 @@ export function resolve(a: ResolveArgs): Analysis {
   let arv: number;
   if (rentKnown) {
     const stabNoi = analyzeDeal({ ...base, arv: allIn }).stabilized.noi;
-    arv = Math.max(0, Math.round(stabNoi / COURSE.incomeCapRate.value / 1000) * 1000);
+    arv = Math.max(0, Math.round(stabNoi / DEFAULTS.incomeCapRate.value / 1000) * 1000);
     add(
       'arv',
       'After-repair value',
       money(arv),
       'estimate',
-      `Income approach: stabilized NOI ÷ ${pct(COURSE.incomeCapRate.value, 0)} cap rate. ${COURSE.incomeCapRate.note}${
+      `Income approach: stabilized NOI ÷ ${pct(DEFAULTS.incomeCapRate.value, 0)} cap rate. ${DEFAULTS.incomeCapRate.note}${
         unitCount <= 4 ? ' Lenders value 1–4 unit properties by sales comps, so treat this as a rough check.' : ''
       }`,
     );
@@ -284,23 +284,23 @@ export function resolve(a: ResolveArgs): Analysis {
   }
   base.arv = arv;
 
-  add('bvr', 'Building share of value', pct(COURSE.buildingValueRatio.value, 0), 'default', COURSE.buildingValueRatio.note);
-  add('taxRate', 'Your tax bracket', pct(COURSE.marginalTaxRate.value, 0), 'default', COURSE.marginalTaxRate.note);
-  add('appreciation', 'Appreciation', `${pct(COURSE.appreciationPct.value, 0)}/yr`, 'default', COURSE.appreciationPct.note);
+  add('bvr', 'Building share of value', pct(DEFAULTS.buildingValueRatio.value, 0), 'default', DEFAULTS.buildingValueRatio.note);
+  add('taxRate', 'Your tax bracket', pct(DEFAULTS.marginalTaxRate.value, 0), 'default', DEFAULTS.marginalTaxRate.note);
+  add('appreciation', 'Appreciation', `${pct(DEFAULTS.appreciationPct.value, 0)}/yr`, 'default', DEFAULTS.appreciationPct.note);
 
   // ---- Run ----
   const result = analyzeDeal(base);
   const links: PriceLinks = {
-    closingCostPct: COURSE.closingCostPct.value,
+    closingCostPct: DEFAULTS.closingCostPct.value,
     stabilizedTaxRateOnPrice: taxRateOnPrice,
-    insurancePctOfCoverage: COURSE.insurancePctOfCoverage.value,
-    taxBump: COURSE.taxBumpOnPurchase.value,
+    insurancePctOfCoverage: DEFAULTS.insurancePctOfCoverage.value,
+    taxBump: DEFAULTS.taxBumpOnPurchase.value,
   };
-  const solutions = solve(base, links, COURSE_TARGETS);
-  const c = checks(result, COURSE_TARGETS);
+  const solutions = solve(base, links, TARGETS);
+  const c = checks(result, TARGETS);
 
   if (result.stabilized.expenseRatio < 0.3 && rentKnown) {
-    warnings.push(`Expense ratio is ${pct(result.stabilized.expenseRatio)}. The course says under 30% probably isn’t conservative enough.`);
+    warnings.push(`Expense ratio is ${pct(result.stabilized.expenseRatio)}. Under 30% probably isn’t conservative enough.`);
   }
 
   // ---- Confidence ----
@@ -319,8 +319,8 @@ export function resolve(a: ResolveArgs): Analysis {
     status === 'rent_unknown'
       ? 'Rent data unavailable. Here’s the rent this deal needs.'
       : status === 'meets'
-        ? 'Meets the course cash-flow targets'
-        : `Below the course targets on ${operating.filter((x) => !x.pass).length} of ${operating.length} cash-flow tests`;
+        ? 'Meets all three cash-flow targets'
+        : `Below target on ${operating.filter((x) => !x.pass).length} of ${operating.length} cash-flow tests`;
 
   const lineSources: Record<string, Source> = {
     gpiCurrent: currentSource,

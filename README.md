@@ -3,8 +3,8 @@
 Three inputs (address, purchase price, listing link) → the full Multifamily Methods underwriting:
 purchase & financing, current vs. stabilized income and expenses, NOI, DSCR, cash flow, cash-on-cash,
 5-year returns (cash flow, tax effect, principal paydown, appreciation, equity), and what price / rent /
-down payment would make the deal hit the course targets. Every input is tagged **Listing**, **Estimate**,
-**Course rule**, **Verified** or **You**.
+down payment would make the deal hit the targets. Every input is tagged **Listing**, **Estimate**,
+**Assumption**, **Verified** or **You**.
 
 ## Run it
 
@@ -33,9 +33,9 @@ Optional free keys improve accuracy: `HUD_API_TOKEN` (ZIP-level Small Area FMRs)
 
 ## Layout
 
-- `shared/engine/` — deterministic underwriting (workbook formulas, with 4 corrections), course defaults, solver
+- `shared/engine/` — deterministic underwriting (workbook formulas, with 4 corrections), defaults, solver
 - `shared/sources/` — geocoder, HUD rents, tax rates, listing reader (SSRF-safe), rehab screen
 - `shared/resolve.ts` — fills every input from the best available source and labels it
 - `server/` — Express API (`/api/suggest`, `/api/analyze`)
 - `web/` — React quick screen
-- `tests/` — engine checked against the course's worked example
+- `tests/` — engine checked against the worked example

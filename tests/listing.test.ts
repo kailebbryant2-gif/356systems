@@ -52,7 +52,7 @@ describe('listing parser', () => {
   });
 });
 
-describe('rehab screen (course bands)', () => {
+describe('rehab screen (per-sq-ft bands)', () => {
   it('maps listing language to $30 / $50 / $75', () => {
     expect(estimateRehab('Needs updating throughout', 1000).cost).toBe(50000);
     expect(estimateRehab('Dated kitchen, original baths', 1000).cost).toBe(30000);

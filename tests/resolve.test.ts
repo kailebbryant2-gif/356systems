@@ -23,8 +23,8 @@ describe('resolver', () => {
     expect(a.listing.status).toBe('used');
   });
 
-  it('uses course + James defaults for a small multifamily', () => {
-    expect(a.result.acquisition.downPayment).toBe(75000); // 25%, James's small-deal loans
+  it('uses standard defaults for a small multifamily', () => {
+    expect(a.result.acquisition.downPayment).toBe(75000); // 25%, small investor loans
     expect(a.result.stabilized.waterSewerTrash).toBe(150 * 2 * 12); // $150 per 2 units
     expect(a.result.stabilized.lawnSnow).toBe(480);
     expect(a.result.current.grossPotentialIncome).toBe(3400 * 12);
