@@ -691,23 +691,22 @@ export function App() {
                 }}
               />
             </div>
-            <details className="facts" open={!!(beds || units || sqft)}>
-              <summary>Know the property better than public records? <span className="opt">optional</span></summary>
+            <div className="facts">
               <div className="facts-grid">
                 <label>
                   Bedrooms
-                  <input className="input" inputMode="numeric" placeholder="auto" value={beds} onChange={(e) => setBeds(e.target.value.replace(/[^\d]/g, '').slice(0, 3))} />
+                  <input className="input" inputMode="numeric" placeholder="optional" value={beds} onChange={(e) => setBeds(e.target.value.replace(/[^\d]/g, '').slice(0, 3))} />
                 </label>
                 <label>
                   Units
-                  <input className="input" inputMode="numeric" placeholder="auto" value={units} onChange={(e) => setUnits(e.target.value.replace(/[^\d]/g, '').slice(0, 3))} />
+                  <input className="input" inputMode="numeric" placeholder="optional" value={units} onChange={(e) => setUnits(e.target.value.replace(/[^\d]/g, '').slice(0, 3))} />
                 </label>
                 <label>
                   Sq ft
                   <input
                     className="input"
                     inputMode="numeric"
-                    placeholder="auto"
+                    placeholder="optional"
                     value={sqft}
                     onChange={(e) => {
                       const d = e.target.value.replace(/[^\d]/g, '').slice(0, 6);
@@ -717,7 +716,7 @@ export function App() {
                 </label>
               </div>
               <p className="form-hint">Total bedrooms for the whole property. Records are often wrong on bedrooms, units and size. What you enter here drives the rent and the ARV comps.</p>
-            </details>
+            </div>
             <p className="form-hint">
               Use your underwriting spreadsheet for the all-in cost; the loan equals it on a 30-year mortgage. For St. Louis City and
               County addresses we also estimate the ARV and check you’re at or under 75% of it.
