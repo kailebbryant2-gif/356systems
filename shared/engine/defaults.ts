@@ -8,7 +8,7 @@ export const DEFAULTS = {
   closingCostPct: { value: 0.02, note: 'Closing costs ≈ 2% of purchase price.' },
   downPaymentSingleFamily: { value: 0.15, note: '15% down on a 1-unit investment loan.' },
   downPaymentMultifamily: { value: 0.2, note: '20% down on multifamily.' },
-  interestRate: { value: 0.075, note: '~7.5% investor / DSCR loan rate. Confirm with a lender.' },
+  interestRate: { value: 0.07, note: 'Prime rate (7% today). Confirm with your lender.' },
   amortYears: { value: 20, note: '20-year amortization, in case the bank won’t give 25.' },
   rehabOutOfPocketPct: { value: 1, note: 'Rehab paid in cash.' },
   vacancyPct: { value: 0.1, note: '10% vacancy, the way most banks underwrite.' },

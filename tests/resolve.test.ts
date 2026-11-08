@@ -23,6 +23,18 @@ describe('resolver', () => {
     expect(a.listing.status).toBe('used');
   });
 
+  it('single-family: no owner-paid utilities, lawn or RUBS', () => {
+    const sfrHtml = html.replace('Fourplex. ', 'Single family home. ').replace('8 beds, 4 baths', '3 beds, 2 baths');
+    const sfr = resolve({ ...base, listing: { ok: true, facts: parseListing(sfrHtml, 'https://example.com/3520-wyoming-st') } });
+    const s = sfr.result.stabilized;
+    expect(s.waterSewerTrash + s.lawnSnow + s.electricGas).toBe(0);
+    expect(sfr.valueAdd).toBeNull();
+  });
+
+  it('models loans at prime (7%)', () => {
+    expect(a.assumptions.find((r) => r.key === 'rate')!.value).toBe('7.0%');
+  });
+
   it('uses standard defaults for a small multifamily', () => {
     expect(a.result.acquisition.downPayment).toBe(75000); // 25%, small investor loans
     expect(a.result.stabilized.waterSewerTrash).toBe(150 * 2 * 12); // $150 per 2 units

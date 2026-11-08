@@ -20,9 +20,8 @@ export const LOANS = {
     minLoan: 1_000_000,
     down: 0.2,
     amortYears: 30,
-    rateDiscount: 0.01,
     minDscr: 1.25,
-    note: 'Fannie Mae / Freddie Mac multifamily loan for $1M+: up to 10-year fixed, possible interest-only period, needs DSCR 1.25+. Rate assumed 1 point under a commercial loan; get a quote.',
+    note: 'Fannie Mae / Freddie Mac multifamily loan for $1M+: up to 10-year fixed, possible interest-only period, needs DSCR 1.25+. Modeled at prime; agency quotes are often lower.',
   },
   rateShock: { small: 0.01, commercial: 0.02 },
   hardMoney: {
@@ -163,7 +162,7 @@ export function analyzeFinancing(inputs: DealInputs, base: DealResult, commercia
   if (base.acquisition.loanAmount >= LOANS.agency.minLoan) {
     const ag = LOANS.agency;
     const loan = price * (1 - ag.down) + (inputs.rehabCost - rehabCash);
-    const rate = inputs.interestRate - ag.rateDiscount;
+    const rate = inputs.interestRate;
     opt({
       id: 'agency',
       name: 'Agency loan',

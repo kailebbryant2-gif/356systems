@@ -128,8 +128,8 @@ describe('value-add levers (value = NOI ÷ cap rate)', () => {
     expect(l.addedValue).toBeCloseTo((4 * 300 * 0.8) / 0.07, 6);
   });
 
-  it('RUBS charges $65/mo per 2-bed on occupied units', () => {
-    expect(v.levers.find((x) => x.id === 'rubs')!.addedNoi).toBeCloseTo(4 * 65 * 12 * 0.9, 6);
+  it('RUBS charges $75/mo per unit on occupied units', () => {
+    expect(v.levers.find((x) => x.id === 'rubs')!.addedNoi).toBeCloseTo(4 * 75 * 12 * 0.9, 6);
   });
 
   it('pet rent and parking are per pet / per spot, with a 3-year payback cap on spending', () => {

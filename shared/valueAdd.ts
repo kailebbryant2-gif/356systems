@@ -26,7 +26,8 @@ export interface ValueAdd {
 
 export const CAP_STRESS = 0.01;
 export const PAYBACK_YEARS = 3;
-export const RUBS = { oneBed: 45, twoPlus: 65 } as const;
+/** Utility billback per unit per month (multifamily only; single-family tenants pay their own utilities). */
+export const RUBS_PER_UNIT = 75;
 export const PET_RENT = 45;
 export const PARKING_RENT = 100;
 
@@ -54,13 +55,12 @@ export function analyzeValueAdd(inputs: DealInputs, result: DealResult, capRate:
     ),
   );
   if (result.stabilized.waterSewerTrash > 0) {
-    const monthly = inputs.units.reduce((s, u) => s + (u.beds <= 1 ? RUBS.oneBed : RUBS.twoPlus), 0);
     levers.push(
       lever(
         'rubs',
         'Bill water, sewer & trash back (RUBS)',
-        monthly * 12 * occupied,
-        `$${RUBS.oneBed}/mo per 1-bed, $${RUBS.twoPlus}/mo per 2+ bed, on occupied units.`,
+        RUBS_PER_UNIT * units * 12 * occupied,
+        `$${RUBS_PER_UNIT}/mo per unit, collected on occupied units.`,
       ),
     );
   }
