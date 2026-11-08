@@ -53,8 +53,9 @@ export const MARKET = {
   },
   commercialLoan: {
     down: 0.2,
+    rehabCashPct: 0.2,
     amortYears: 20,
-    note: 'Typical commercial loan at $1M+ or 5+ units: 20% down, 20–25-year amortization (20 used).',
+    note: 'Typical commercial loan at $1M+ or 5+ units: 80% of purchase and rehab (loan-to-cost), 20–25-year amortization (20 used), usually an ARM or balloon.',
   },
   rentUplift: {
     value: 0.07,

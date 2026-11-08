@@ -378,7 +378,9 @@ function ValueCard({ a }: { a: Analysis }) {
           <li key={l.id}>
             <div>
               <div className="lever-label">{l.label}</div>
-              <div className="lever-note">{l.note} +{money(l.addedNoi)}/yr NOI.</div>
+              <div className="lever-note">
+                {l.note} +{money(l.addedNoi)}/yr NOI · worth spending up to {money(l.maxSpend)}
+              </div>
             </div>
             <strong className="pos">+{money(l.addedValue)}</strong>
           </li>
@@ -388,7 +390,7 @@ function ValueCard({ a }: { a: Analysis }) {
         {v.incomeValued
           ? 'Buildings with 5+ units are valued on income, so every operating improvement shows up in value. '
           : 'Lenders value 1–4 units on sales comps, so treat these as income-based indications. '}
-        Cap rate stressed to {pct(v.capRate, 0)}; ask several brokers (not the listing broker) what similar stabilized buildings trade at,
+        “Worth spending up to” = pays for itself within 3 years. Cap rate stressed to {pct(v.capRate, 0)}; ask several brokers (not the listing broker) what similar stabilized buildings trade at,
         then underwrite 0.5–1 point higher.
       </p>
     </section>

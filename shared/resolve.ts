@@ -250,7 +250,7 @@ export function resolve(a: ResolveArgs): Analysis {
     interestRate: DEFAULTS.interestRate.value,
     amortYears: loan.amortYears,
     rehabCost: rehab.cost,
-    rehabOutOfPocketPct: DEFAULTS.rehabOutOfPocketPct.value,
+    rehabOutOfPocketPct: commercial ? MARKET.commercialLoan.rehabCashPct : DEFAULTS.rehabOutOfPocketPct.value,
     arv: 0,
     units,
     vacancyPct: DEFAULTS.vacancyPct.value,

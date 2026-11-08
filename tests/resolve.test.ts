@@ -68,6 +68,7 @@ describe('resolver', () => {
     expect(big.result.acquisition.downPayment).toBe(420000);
     expect(big.assumptions.find((r) => r.key === 'amort')!.value).toBe('20 years');
     expect(big.result.stabilized.management).toBeCloseTo(big.result.stabilized.grossPotentialIncome * 0.05, 6);
+    expect(big.result.acquisition.rehabOutOfPocket).toBeCloseTo(big.rehab.cost * 0.2, 6); // 80% loan-to-cost
   });
 
   it('stabilized rent: current + 7%, but at least the HUD benchmark', () => {

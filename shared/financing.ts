@@ -16,6 +16,14 @@ export const LOANS = {
     amortYears: 30,
     note: 'Live in one unit for at least a year. 3.5% down, 30-year fixed, plus FHA mortgage insurance (1.75% upfront, 0.55%/yr). One FHA loan at a time.',
   },
+  agency: {
+    minLoan: 1_000_000,
+    down: 0.2,
+    amortYears: 30,
+    rateDiscount: 0.01,
+    minDscr: 1.25,
+    note: 'Fannie Mae / Freddie Mac multifamily loan for $1M+: up to 10-year fixed, possible interest-only period, needs DSCR 1.25+. Rate assumed 1 point under a commercial loan; get a quote.',
+  },
   rateShock: { small: 0.01, commercial: 0.02 },
   hardMoney: {
     maxLtvArv: 0.75,
@@ -49,7 +57,7 @@ export const LOANS = {
 } as const;
 
 export interface FinancingOption {
-  id: 'base' | 'conventional' | 'fha' | 'seller' | 'carryback' | 'shock';
+  id: 'base' | 'conventional' | 'fha' | 'agency' | 'seller' | 'carryback' | 'shock';
   name: string;
   detail: string;
   downPct: number | null;
@@ -149,6 +157,21 @@ export function analyzeFinancing(inputs: DealInputs, base: DealResult, commercia
       monthlyPayment: pmt,
       noi: rented,
       note: LOANS.fha.note,
+    });
+  }
+
+  if (base.acquisition.loanAmount >= LOANS.agency.minLoan) {
+    const ag = LOANS.agency;
+    const loan = price * (1 - ag.down) + (inputs.rehabCost - rehabCash);
+    const rate = inputs.interestRate - ag.rateDiscount;
+    opt({
+      id: 'agency',
+      name: 'Agency loan',
+      detail: `${Math.round(ag.down * 100)}% down · ${(rate * 100).toFixed(1)}% · 30-yr amort`,
+      downPct: ag.down,
+      cashToClose: price * ag.down + inputs.closingCosts + rehabCash,
+      monthlyPayment: monthlyPayment(loan, rate, ag.amortYears),
+      note: ag.note,
     });
   }
 

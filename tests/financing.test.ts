@@ -101,7 +101,7 @@ describe('loan options', () => {
   it('commercial deals get a seller carryback and a +2% ARM reset instead of conventional/FHA', () => {
     const big = { ...duplex, purchasePrice: 1500000, closingCosts: 30000, units: Array.from({ length: 20 }, () => unit(1100)) };
     const ids = analyzeFinancing(big, analyzeDeal(big), true).options.map((o) => o.id);
-    expect(ids).toEqual(['base', 'seller', 'carryback', 'shock']);
+    expect(ids).toEqual(['base', 'agency', 'seller', 'carryback', 'shock']);
   });
 });
 
@@ -128,8 +128,15 @@ describe('value-add levers (value = NOI ÷ cap rate)', () => {
     expect(l.addedValue).toBeCloseTo((4 * 300 * 0.8) / 0.07, 6);
   });
 
-  it('utility billback recovers owner-paid water, sewer and trash', () => {
-    expect(v.levers.find((x) => x.id === 'billback')!.addedNoi).toBe(3600);
+  it('RUBS charges $65/mo per 2-bed on occupied units', () => {
+    expect(v.levers.find((x) => x.id === 'rubs')!.addedNoi).toBeCloseTo(4 * 65 * 12 * 0.9, 6);
+  });
+
+  it('pet rent and parking are per pet / per spot, with a 3-year payback cap on spending', () => {
+    const pet = v.levers.find((x) => x.id === 'pet')!;
+    expect(pet.addedNoi).toBe(540);
+    expect(pet.maxSpend).toBe(1620);
+    expect(v.levers.find((x) => x.id === 'parking')!.addedValue).toBeCloseTo(1200 / 0.07, 6);
   });
 
   it('single-family gets no value-add card', () => {
