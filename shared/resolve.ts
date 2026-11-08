@@ -28,6 +28,8 @@ export interface Analysis {
     confidenceReasons: string[];
   };
   rentKnown: boolean;
+  /** True only when the listing states today's rent; otherwise there is no real 'current' column. */
+  currentRentKnown: boolean;
   result: DealResult;
   checks: Check[];
   solutions: Solutions;
@@ -347,6 +349,7 @@ export function resolve(a: ResolveArgs): Analysis {
     purchasePrice: price,
     verdict: { status, headline, confidence, confidenceReasons: reasons },
     rentKnown,
+    currentRentKnown: !!listedRent,
     result,
     checks: c,
     solutions,

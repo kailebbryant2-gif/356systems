@@ -545,6 +545,7 @@ function Statement({ a }: { a: Analysis }) {
   const s = a.result.stabilized;
   const ls = a.lineSources;
   const uniq = (xs: Source[]) => xs.filter((x, i) => xs.indexOf(x) === i);
+  const showCur = a.currentRentKnown;
   const line = (label: string, cur: number, stab: number, src: Source | Source[], opts: { neg?: boolean; strong?: boolean } = {}) => {
     const srcs = Array.isArray(src) ? src : [src];
     return (
@@ -552,7 +553,7 @@ function Statement({ a }: { a: Analysis }) {
         <td>
           {label} {srcs.map((x, i) => <Tag key={i} source={x} />)}
         </td>
-        <td>{money((opts.neg ? -cur : cur) / d)}</td>
+        {showCur && <td>{money((opts.neg ? -cur : cur) / d)}</td>}
         <td>{money((opts.neg ? -stab : stab) / d)}</td>
       </tr>
     );
@@ -569,13 +570,19 @@ function Statement({ a }: { a: Analysis }) {
           </button>
         ))}
       </div>
+      {!showCur && (
+        <p className="tip">
+          The listing doesn’t show today’s rent, so there’s no “current vs. after” comparison, just the projection at market rent. Use a
+          listing that states the rents (or rent roll) to see both.
+        </p>
+      )}
       <div className="table-wrap">
         <table className="tbl">
           <thead>
             <tr>
               <th />
-              <th>Current</th>
-              <th>Stabilized</th>
+              {showCur && <th>Current</th>}
+              <th>{showCur ? 'Stabilized' : 'Projected'}</th>
             </tr>
           </thead>
           <tbody>
@@ -596,25 +603,26 @@ function Statement({ a }: { a: Analysis }) {
           <tbody className="ratios">
             <tr>
               <td>DSCR</td>
-              <td>{ratio(c.dscr)}</td>
+              {showCur && <td>{ratio(c.dscr)}</td>}
               <td>{ratio(s.dscr)}</td>
             </tr>
             <tr>
               <td>Expense ratio</td>
-              <td>{pct(c.expenseRatio)}</td>
+              {showCur && <td>{pct(c.expenseRatio)}</td>}
               <td>{pct(s.expenseRatio)}</td>
             </tr>
             <tr>
               <td>Cash-on-cash</td>
-              <td>{pct(c.cashOnCash)}</td>
+              {showCur && <td>{pct(c.cashOnCash)}</td>}
               <td>{pct(s.cashOnCash)}</td>
             </tr>
           </tbody>
         </table>
       </div>
       <p className="fine">
-        Current = today’s rent (or the benchmark when the listing doesn’t state rent). Stabilized = after any rehab, at market rent with
-        taxes reassessed.
+        {showCur
+          ? 'Current = today’s rent from the listing. Stabilized = after any rehab, at market rent with taxes reassessed after purchase.'
+          : 'Projected = market rent with taxes reassessed after purchase.'}
       </p>
     </details>
   );

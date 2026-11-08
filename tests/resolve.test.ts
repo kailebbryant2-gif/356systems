@@ -31,6 +31,11 @@ describe('resolver', () => {
     expect(sfr.valueAdd).toBeNull();
   });
 
+  it('only claims a current column when the listing states rent', () => {
+    expect(a.currentRentKnown).toBe(true);
+    expect(resolve({ ...base, listing: null }).currentRentKnown).toBe(false);
+  });
+
   it('models loans at prime (7%)', () => {
     expect(a.assumptions.find((r) => r.key === 'rate')!.value).toBe('7.0%');
   });
