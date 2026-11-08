@@ -119,7 +119,7 @@ function Verdict({ a }: { a: Analysis }) {
   return (
     <section className={`card verdict verdict-${s}`}>
       <div className="verdict-top">
-        <span className={`badge badge-${s}`}>{s === 'meets' ? 'Works' : s === 'misses' ? 'Doesn’t work yet' : 'Needs rent data'}</span>
+        <span className={`badge badge-${s}`}>{s === 'meets' ? 'Meets targets' : s === 'misses' ? 'Below targets' : 'Needs rent data'}</span>
         <span className={`confidence confidence-${a.verdict.confidence}`} title={a.verdict.confidenceReasons.join(' · ')}>
           {a.verdict.confidence} confidence
         </span>

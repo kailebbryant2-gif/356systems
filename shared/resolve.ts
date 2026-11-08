@@ -1,5 +1,5 @@
 import { analyzeDeal } from './engine/engine';
-import { COURSE, COURSE_TARGETS } from './engine/defaults';
+import { COURSE, COURSE_TARGETS, JAMES } from './engine/defaults';
 import { checks, solve, type PriceLinks, type Solutions } from './engine/solver';
 import type { Check, DealInputs, DealResult, Source, Unit } from './engine/types';
 import type { GeocodedAddress } from './sources/geocode';
@@ -81,15 +81,29 @@ export function resolve(a: ResolveArgs): Analysis {
 
   // ---- Unit mix ----
   const price = a.purchasePrice;
+  const listedRent = facts?.monthlyRent ?? null;
   let unitCount = facts?.units ?? null;
-  const unitsSource: Source = unitCount ? 'listing' : 'estimate';
+  let unitsSource: Source = 'listing';
+  let unitsNote = 'Stated in the listing.';
   if (!unitCount) {
-    unitCount = 1;
-    warnings.push('Unit count not found. Modeled as 1 unit. Results change a lot if this is multifamily.');
+    unitsSource = 'estimate';
+    const twoBed = a.fmr?.byBedrooms[2] ?? 0;
+    const maxHouse = (a.fmr?.byBedrooms[4] ?? 0) * 1.1;
+    if (listedRent && twoBed && listedRent > maxHouse) {
+      // More rent than a single house earns here: estimate units at the area's 2-bed rent.
+      unitCount = Math.max(2, Math.round(listedRent / twoBed));
+      unitsNote = `Not stated. The listing’s ${money(listedRent)}/mo is more than a house rents for here, so estimated at ${unitCount} units (rent ÷ HUD 2-bed ${money(twoBed)}).`;
+      warnings.push(`Unit count not stated. Estimated ${unitCount} units from the rent. Check the listing and adjust your read of the results.`);
+    } else {
+      unitCount = 1;
+      unitsNote = 'Not found in the listing. Assumed 1 unit.';
+      warnings.push('Unit count not found. Modeled as 1 unit. Results change a lot if this is multifamily.');
+    }
   }
-  add('units', 'Units', String(unitCount), unitsSource, unitCount && unitsSource === 'listing' ? 'Stated in the listing.' : 'Not found in the listing. Assumed 1 unit.');
+  add('units', 'Units', String(unitCount), unitsSource, unitsNote);
+  const commercial = unitCount >= JAMES.commercialMinUnits || price >= JAMES.commercialMinPrice;
 
-  const bedsPerUnit = facts?.totalBeds ? Math.max(0, Math.min(4, Math.round(facts.totalBeds / unitCount))) : 2;
+  const bedsPerUnit = facts?.totalBeds && unitsSource === 'listing' ? Math.max(0, Math.min(4, Math.round(facts.totalBeds / unitCount))) : 2;
   const bedsSource: Source = facts?.totalBeds ? 'listing' : 'estimate';
   const bathsPerUnit = facts?.totalBaths ? Math.max(1, Math.round((facts.totalBaths / unitCount) * 2) / 2) : 1;
   add(
@@ -111,18 +125,23 @@ export function resolve(a: ResolveArgs): Analysis {
   );
 
   // ---- Rents ----
+  const hudPerUnit = a.fmr ? a.fmr.byBedrooms[bedsPerUnit] : 0;
+  const hudLabel = a.fmr
+    ? `HUD Fair Market Rent ${a.fmr.year} for a ${bedsPerUnit}-bed${a.fmr.zipLevel ? ` in ZIP ${a.geo.zip}` : ` in ${a.fmr.areaName}`}`
+    : '';
   let marketPerUnit = 0;
   let marketSource: Source = 'estimate';
   let marketNote = '';
-  if (a.fmr) {
-    marketPerUnit = a.fmr.byBedrooms[bedsPerUnit];
-    marketNote = `HUD Fair Market Rent ${a.fmr.year} for a ${bedsPerUnit}-bed${a.fmr.zipLevel ? ` in ZIP ${a.geo.zip}` : ` in ${a.fmr.areaName}`}. HUD sets this at the 40th percentile, including utilities, so it runs conservative.`;
-  }
-  const listedRent = facts?.monthlyRent ?? null;
-  if (!marketPerUnit && listedRent) {
-    marketPerUnit = listedRent / unitCount;
-    marketSource = 'listing';
-    marketNote = 'No market-rent source available. Stabilized rent assumed equal to the listing’s current rent.';
+  if (listedRent) {
+    const uplifted = (listedRent / unitCount) * (1 + JAMES.rentUplift.value);
+    marketPerUnit = Math.max(uplifted, hudPerUnit);
+    marketNote =
+      hudPerUnit > uplifted
+        ? `${hudLabel}: ${money(hudPerUnit)}. Current rent is below it, so a renovated unit is assumed to reach it.`
+        : `Current rent + 7%. ${JAMES.rentUplift.note}${hudPerUnit ? ` ${hudLabel}: ${money(hudPerUnit)}.` : ''}`;
+  } else if (hudPerUnit) {
+    marketPerUnit = hudPerUnit;
+    marketNote = `${hudLabel}. HUD sets this at the 40th percentile, including utilities, so it runs conservative.`;
   }
   const rentKnown = marketPerUnit > 0;
   if (!rentKnown) {
@@ -150,7 +169,7 @@ export function resolve(a: ResolveArgs): Analysis {
   }));
 
   // ---- Rehab ----
-  const rehab = estimateRehab(`${facts?.description ?? ''} ${facts?.text ?? ''}`, sqftTotal);
+  const rehab = estimateRehab(`${facts?.description ?? ''} ${facts?.text ?? ''}`, sqftTotal, { occupied: !!listedRent });
   add(
     'rehab',
     'Rehab budget',
@@ -160,7 +179,8 @@ export function resolve(a: ResolveArgs): Analysis {
   );
 
   // ---- Taxes ----
-  const rate = a.taxRate?.rate ?? null;
+  const rate = commercial ? JAMES.taxRateCommercial.value : (a.taxRate?.rate ?? null);
+  const rateNote = commercial ? JAMES.taxRateCommercial.note : (a.taxRate?.note ?? '');
   let taxesCurrent: number;
   let taxSource: Source;
   let taxNote: string;
@@ -171,7 +191,7 @@ export function resolve(a: ResolveArgs): Analysis {
   } else if (rate) {
     taxesCurrent = price * rate;
     taxSource = 'estimate';
-    taxNote = `${a.taxRate!.note} × purchase price.`;
+    taxNote = `${rateNote} × purchase price.`;
   } else {
     taxesCurrent = price * 0.01;
     taxSource = 'estimate';
@@ -189,7 +209,8 @@ export function resolve(a: ResolveArgs): Analysis {
   );
 
   // ---- Financing and the rest of the course defaults ----
-  const down = unitCount > 1 ? COURSE.downPaymentMultifamily : COURSE.downPaymentSingleFamily;
+  const loan = commercial ? JAMES.commercialLoan : JAMES.smallLoan;
+  const mgmt = commercial ? JAMES.managementCommercial : COURSE.managementPct;
   const insurance = (price + rehab.cost) * COURSE.insurancePctOfCoverage.value;
   const owner =
     unitCount > 1
@@ -200,13 +221,13 @@ export function resolve(a: ResolveArgs): Analysis {
         }
       : { lawnSnow: 0, waterSewerTrash: 0, electricGas: 0 };
 
-  add('down', 'Down payment', pct(down.value, 0), 'default', down.note);
+  add('down', 'Down payment', pct(loan.down, 0), 'default', loan.note);
   add('rate', 'Interest rate', pct(COURSE.interestRate.value, 1), 'default', COURSE.interestRate.note);
-  add('amort', 'Amortization', `${COURSE.amortYears.value} years`, 'default', COURSE.amortYears.note);
+  add('amort', 'Amortization', `${loan.amortYears} years`, 'default', loan.note);
   add('closing', 'Closing costs', money(price * COURSE.closingCostPct.value), 'default', COURSE.closingCostPct.note);
   add('vacancy', 'Vacancy', pct(COURSE.vacancyPct.value, 0), 'default', COURSE.vacancyPct.note);
   add('maintenance', 'Maintenance', pct(COURSE.maintenancePct.value, 0), 'default', COURSE.maintenancePct.note);
-  add('management', 'Management', pct(COURSE.managementPct.value, 0), 'default', COURSE.managementPct.note);
+  add('management', 'Management', pct(mgmt.value, 0), 'default', mgmt.note);
   add('insurance', 'Insurance', `${money(insurance)}/yr`, 'default', COURSE.insurancePctOfCoverage.note);
   add(
     'utilities',
@@ -214,16 +235,16 @@ export function resolve(a: ResolveArgs): Analysis {
     unitCount > 1 ? `${money(owner.waterSewerTrash)}/mo water, sewer, trash · ${money(owner.lawnSnow)}/mo lawn & snow` : '$0 (tenant pays)',
     'default',
     unitCount > 1
-      ? `${COURSE.waterSewerTrashPer2Units.note} Tenants pay electric and gas (separate meters assumed).`
+      ? `${COURSE.waterSewerTrashPer2Units.note} James’s multifamily deals ran 7–10% of gross rent, which this matches at typical St. Louis rents. Tenants pay electric and gas.`
       : 'Course rule: on a single-family, the tenant pays all utilities and lawn care.',
   );
 
   const base: DealInputs = {
     purchasePrice: price,
     closingCosts: price * COURSE.closingCostPct.value,
-    downPaymentPct: down.value,
+    downPaymentPct: loan.down,
     interestRate: COURSE.interestRate.value,
-    amortYears: COURSE.amortYears.value,
+    amortYears: loan.amortYears,
     rehabCost: rehab.cost,
     rehabOutOfPocketPct: COURSE.rehabOutOfPocketPct.value,
     arv: 0,
@@ -232,7 +253,7 @@ export function resolve(a: ResolveArgs): Analysis {
     taxesCurrent,
     taxesStabilized,
     insurance,
-    managementPct: COURSE.managementPct.value,
+    managementPct: mgmt.value,
     maintenancePct: COURSE.maintenancePct.value,
     current: owner,
     stabilized: owner,
@@ -299,7 +320,7 @@ export function resolve(a: ResolveArgs): Analysis {
       ? 'Rent data unavailable. Here’s the rent this deal needs.'
       : status === 'meets'
         ? 'Meets the course cash-flow targets'
-        : `Misses ${operating.filter((x) => !x.pass).length} of ${operating.length} cash-flow targets`;
+        : `Below the course targets on ${operating.filter((x) => !x.pass).length} of ${operating.length} cash-flow tests`;
 
   const lineSources: Record<string, Source> = {
     gpiCurrent: currentSource,

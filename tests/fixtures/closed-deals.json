@@ -1,0 +1,236 @@
+{
+ "note": "Anonymized closed deals underwritten by James (Multifamily Methods). Whole-building rent; unit counts not recorded. Used to check the engine reproduces his spreadsheet math.",
+ "deals": [
+  {
+   "id": "deal-01",
+   "price": 125000,
+   "currentRent": 1400,
+   "marketRent": 1450,
+   "taxesAnnual": 1800,
+   "insuranceMonthly": 50,
+   "ownerUtilitiesMonthly": 0,
+   "lawnMonthly": 25,
+   "managementPct": 0.045,
+   "vacancyPct": 0.1,
+   "maintenancePct": 0.1,
+   "downPct": 0.25,
+   "rate": 0.075,
+   "amortYears": 30,
+   "sheet": {
+    "monthlyPayment": 655.51,
+    "currentNoiMonthly": 832,
+    "stabilizedNoiMonthly": 869.75
+   }
+  },
+  {
+   "id": "deal-02",
+   "price": 360000,
+   "currentRent": 3000,
+   "marketRent": 3400,
+   "taxesAnnual": 3000,
+   "insuranceMonthly": 200,
+   "ownerUtilitiesMonthly": 25,
+   "lawnMonthly": 0,
+   "managementPct": 0,
+   "vacancyPct": 0.05,
+   "maintenancePct": 0.1,
+   "downPct": 0.25,
+   "rate": 0.075,
+   "amortYears": 30,
+   "sheet": {
+    "monthlyPayment": 1887.88,
+    "currentNoiMonthly": 2075,
+    "stabilizedNoiMonthly": 2415
+   }
+  },
+  {
+   "id": "deal-03",
+   "price": 396000,
+   "currentRent": 2400,
+   "marketRent": 2700,
+   "taxesAnnual": 3500,
+   "insuranceMonthly": 150,
+   "ownerUtilitiesMonthly": 150,
+   "lawnMonthly": 0,
+   "managementPct": 0,
+   "vacancyPct": 0.05,
+   "maintenancePct": 0.1,
+   "downPct": 0.25,
+   "rate": 0.0675,
+   "amortYears": 30,
+   "sheet": {
+    "monthlyPayment": 1926.34,
+    "currentNoiMonthly": 1448.33,
+    "stabilizedNoiMonthly": 1703.33
+   }
+  },
+  {
+   "id": "deal-04",
+   "price": 404000,
+   "currentRent": 3600,
+   "marketRent": 3800,
+   "taxesAnnual": 2400,
+   "insuranceMonthly": 200,
+   "ownerUtilitiesMonthly": 150,
+   "lawnMonthly": 0,
+   "managementPct": 0,
+   "vacancyPct": 0.1,
+   "maintenancePct": 0.05,
+   "downPct": 0.25,
+   "rate": 0.0899,
+   "amortYears": 30,
+   "sheet": {
+    "monthlyPayment": 2435.83,
+    "currentNoiMonthly": 2510,
+    "stabilizedNoiMonthly": 2680
+   }
+  },
+  {
+   "id": "deal-05",
+   "price": 415000,
+   "currentRent": 3500,
+   "marketRent": 10000,
+   "taxesAnnual": 2200,
+   "insuranceMonthly": 160,
+   "ownerUtilitiesMonthly": 0,
+   "lawnMonthly": 0,
+   "managementPct": 0,
+   "vacancyPct": 0.05,
+   "maintenancePct": 0.1,
+   "downPct": 0.25,
+   "rate": 0.0725,
+   "amortYears": 30,
+   "sheet": {
+    "monthlyPayment": 2123.27,
+    "currentNoiMonthly": 2631.67,
+    "stabilizedNoiMonthly": 8156.67
+   }
+  },
+  {
+   "id": "deal-06",
+   "price": 475000,
+   "currentRent": 6500,
+   "marketRent": 6500,
+   "taxesAnnual": 1300,
+   "insuranceMonthly": 175,
+   "ownerUtilitiesMonthly": 600,
+   "lawnMonthly": 75,
+   "managementPct": 0.05,
+   "vacancyPct": 0.05,
+   "maintenancePct": 0.05,
+   "downPct": 0.25,
+   "rate": 0.085,
+   "amortYears": 30,
+   "sheet": {
+    "monthlyPayment": 2739.25,
+    "currentNoiMonthly": 4566.67,
+    "stabilizedNoiMonthly": 4566.67
+   }
+  },
+  {
+   "id": "deal-07",
+   "price": 500000,
+   "currentRent": 3500,
+   "marketRent": 10000,
+   "taxesAnnual": 1200,
+   "insuranceMonthly": 180,
+   "ownerUtilitiesMonthly": 0,
+   "lawnMonthly": 0,
+   "managementPct": 0,
+   "vacancyPct": 0.05,
+   "maintenancePct": 0.1,
+   "downPct": 0.25,
+   "rate": 0.0725,
+   "amortYears": 30,
+   "sheet": {
+    "monthlyPayment": 2558.16,
+    "currentNoiMonthly": 2695,
+    "stabilizedNoiMonthly": 8220
+   }
+  },
+  {
+   "id": "deal-08",
+   "price": 675000,
+   "currentRent": 7300,
+   "marketRent": 7300,
+   "taxesAnnual": 3300,
+   "insuranceMonthly": 250,
+   "ownerUtilitiesMonthly": 650,
+   "lawnMonthly": 75,
+   "managementPct": 0.05,
+   "vacancyPct": 0.05,
+   "maintenancePct": 0.05,
+   "downPct": 0.25,
+   "rate": 0.08625,
+   "amortYears": 30,
+   "sheet": {
+    "monthlyPayment": 3937.56,
+    "currentNoiMonthly": 4955,
+    "stabilizedNoiMonthly": 4955
+   }
+  },
+  {
+   "id": "deal-09",
+   "price": 1350000,
+   "currentRent": 28500,
+   "marketRent": 30000,
+   "taxesAnnual": 15000,
+   "insuranceMonthly": 730,
+   "ownerUtilitiesMonthly": 3000,
+   "lawnMonthly": 250,
+   "managementPct": 0,
+   "vacancyPct": 0.1,
+   "maintenancePct": 0.1,
+   "downPct": 0.2,
+   "rate": 0.0725,
+   "amortYears": 20,
+   "sheet": {
+    "monthlyPayment": 8536.06,
+    "currentNoiMonthly": 17570,
+    "stabilizedNoiMonthly": 18770
+   }
+  },
+  {
+   "id": "deal-10",
+   "price": 2100000,
+   "currentRent": 41000,
+   "marketRent": 44000,
+   "taxesAnnual": 35000,
+   "insuranceMonthly": 1050,
+   "ownerUtilitiesMonthly": 3500,
+   "lawnMonthly": 500,
+   "managementPct": 0.045,
+   "vacancyPct": 0.1,
+   "maintenancePct": 0.1,
+   "downPct": 0.2,
+   "rate": 0.075,
+   "amortYears": 20,
+   "sheet": {
+    "monthlyPayment": 13533.97,
+    "currentNoiMonthly": 22988.33,
+    "stabilizedNoiMonthly": 25253.33
+   }
+  },
+  {
+   "id": "deal-11",
+   "price": 3675000,
+   "currentRent": 35000,
+   "marketRent": 42000,
+   "taxesAnnual": 46000,
+   "insuranceMonthly": 2000,
+   "ownerUtilitiesMonthly": 2500,
+   "lawnMonthly": 55,
+   "managementPct": 0.045,
+   "vacancyPct": 0.07,
+   "maintenancePct": 0.05,
+   "downPct": 0.2,
+   "rate": 0.0675,
+   "amortYears": 25,
+   "sheet": {
+    "monthlyPayment": 20312.8,
+    "currentNoiMonthly": 20836.67,
+    "stabilizedNoiMonthly": 26681.67
+   }
+  }
+ ]
+}

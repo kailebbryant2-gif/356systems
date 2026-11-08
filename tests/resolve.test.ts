@@ -23,8 +23,8 @@ describe('resolver', () => {
     expect(a.listing.status).toBe('used');
   });
 
-  it('uses multifamily course defaults', () => {
-    expect(a.result.acquisition.downPayment).toBe(60000); // 20%
+  it('uses course + James defaults for a small multifamily', () => {
+    expect(a.result.acquisition.downPayment).toBe(75000); // 25%, James's small-deal loans
     expect(a.result.stabilized.waterSewerTrash).toBe(150 * 2 * 12); // $150 per 2 units
     expect(a.result.stabilized.lawnSnow).toBe(480);
     expect(a.result.current.grossPotentialIncome).toBe(3400 * 12);
@@ -51,5 +51,29 @@ describe('resolver', () => {
     expect(c.result.stabilized.taxes).toBeGreaterThan(0);
     expect(c.result.stabilized.insurance).toBeGreaterThan(0);
     expect(c.solutions.requiredMonthlyRent).toBeGreaterThan(0);
+  });
+
+  it('estimates units from rent when the listing omits them', () => {
+    const noUnits = `<html><head><meta property="og:title" content="3520 Wyoming St, St. Louis, MO 63118"></head>
+<body>Brick building. Total monthly rent: $7,300.</body></html>`;
+    const b = resolve({ ...base, purchasePrice: 675000, listing: { ok: true, facts: parseListing(noUnits, 'https://example.com/3520-wyoming-st') } });
+    const units = b.assumptions.find((r) => r.key === 'units')!;
+    expect(units.source).toBe('estimate');
+    expect(Number(units.value)).toBe(Math.round(7300 / 1218)); // 6
+    expect(b.result.stabilized.waterSewerTrash).toBeGreaterThan(0);
+  });
+
+  it('underwrites $1M+ or 5+ units as commercial (20% down, 20 years, 5% management)', () => {
+    const big = resolve({ ...base, purchasePrice: 2100000, listing });
+    expect(big.result.acquisition.downPayment).toBe(420000);
+    expect(big.assumptions.find((r) => r.key === 'amort')!.value).toBe('20 years');
+    expect(big.result.stabilized.management).toBeCloseTo(big.result.stabilized.grossPotentialIncome * 0.05, 6);
+  });
+
+  it('stabilized rent: current + 7%, but at least the HUD benchmark', () => {
+    const highRent = html.replace('$3,400', '$6,000');
+    const c = resolve({ ...base, listing: { ok: true, facts: parseListing(highRent, 'https://example.com/3520-wyoming-st') } });
+    expect(c.result.stabilized.grossPotentialIncome).toBeCloseTo(6000 * 1.07 * 12, 6);
+    expect(a.result.stabilized.grossPotentialIncome).toBe(1218 * 4 * 12); // 3,400/4 + 7% is below HUD
   });
 });

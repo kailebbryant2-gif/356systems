@@ -38,6 +38,32 @@ export const COURSE = {
   incomeCapRate: { value: 0.07, note: 'Course cap-rate lesson: stress the exit cap to 6.5–7% (7% used).' },
 } as const;
 
+/**
+ * Calibration from 11 deals James underwrote and closed in St. Louis ($125k–$3.7M).
+ * Where his real practice differs from a course rule of thumb, these win.
+ */
+export const JAMES = {
+  /** A deal is underwritten as "commercial" at 5+ units or $1M+. */
+  commercialMinUnits: 5,
+  commercialMinPrice: 1_000_000,
+  smallLoan: {
+    down: 0.25,
+    amortYears: 30,
+    note: 'James’s closed deals under $1M: 25% down, 30-year amortization (DSCR-style investor loans).',
+  },
+  commercialLoan: {
+    down: 0.2,
+    amortYears: 20,
+    note: 'James’s $1M+ deals: 20% down on 20–25-year commercial loans (20 used, the course’s conservative choice).',
+  },
+  rentUplift: {
+    value: 0.07,
+    note: 'James’s deals: market rent ran a median ~7% above in-place rent (range 4–20%).',
+  },
+  managementCommercial: { value: 0.05, note: 'James’s larger deals budget 4.5–5% for management.' },
+  taxRateCommercial: { value: 0.013, note: 'James’s $1M+ deals paid 1.1–1.7% of price in property taxes (1.3% used)' },
+} as const;
+
 export const COURSE_TARGETS: Targets = {
   minDscr: 1.2,
   minCashFlowPerUnitMonthly: 150,

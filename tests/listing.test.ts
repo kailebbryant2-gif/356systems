@@ -65,4 +65,9 @@ describe('rehab screen (course bands)', () => {
     expect(r.scope).toBe('unknown');
     expect([r.low, r.cost, r.high]).toEqual([30000, 50000, 75000]);
   });
+  it('an occupied, rent-producing building with no condition notes gets no rehab', () => {
+    const r = estimateRehab('Nice brick building, fully leased', 1000, { occupied: true });
+    expect([r.low, r.cost, r.high]).toEqual([0, 0, 30000]);
+    expect(estimateRehab('Needs work, fully leased', 1000, { occupied: true }).cost).toBe(50000);
+  });
 });

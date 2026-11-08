@@ -22,7 +22,7 @@ export interface RehabEstimate {
  * ($30 cosmetic / $50 cosmetic + electrical & plumbing / $75 gut).
  * This is a screening estimate, not a bid or an inspection.
  */
-export function estimateRehab(listingText: string, sqft: number): RehabEstimate {
+export function estimateRehab(listingText: string, sqft: number, opts: { occupied?: boolean } = {}): RehabEstimate {
   const t = listingText.slice(0, 20000);
   const hit = (re: RegExp) => t.match(re)?.[0] ?? null;
   const gut = hit(GUT);
@@ -44,7 +44,7 @@ export function estimateRehab(listingText: string, sqft: number): RehabEstimate 
     cosmetic: [b.cosmetic, b.cosmetic, b.substantial],
     substantial: [b.substantial, b.cosmetic, b.gut],
     gut: [b.gut, b.substantial, b.gut],
-    unknown: [b.substantial, b.cosmetic, b.gut],
+    unknown: opts.occupied ? [0, 0, b.cosmetic] : [b.substantial, b.cosmetic, b.gut],
   };
   const [perSqft, lo, hi] = band[scope];
   const notes: Record<RehabScope, string> = {
@@ -52,7 +52,9 @@ export function estimateRehab(listingText: string, sqft: number): RehabEstimate 
     cosmetic: 'Listing language suggests cosmetic work: course rule $30/sq ft.',
     substantial: 'Listing language suggests substantial work: course rule $50/sq ft (does not prove electrical/plumbing issues).',
     gut: 'Listing language suggests a gut rehab: course rule $75/sq ft.',
-    unknown: 'Condition not stated in the listing: middle course band ($50/sq ft) with a $30–$75 range.',
+    unknown: opts.occupied
+      ? 'Rent-producing building and the listing doesn’t describe any needed work, so no rehab is modeled (James’s closed operating deals carried none). Range shown up to the $30/sq ft cosmetic band; confirm at inspection.'
+      : 'Condition not stated in the listing: middle course band ($50/sq ft) with a $30–$75 range.',
   };
   return {
     scope,
