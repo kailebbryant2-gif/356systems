@@ -323,6 +323,53 @@ const SEGMENTS = [
   { key: 'cashflow', label: 'Cash flow', color: '#01af8d' },
 ] as const;
 
+function RentComps({ a }: { a: Analysis }) {
+  const m = a.marketRent;
+  if (!m || !m.comps.length) return null;
+  const perUnit = a.units > 1;
+  return (
+    <section className="card reveal" style={reveal(5)}>
+      <div className="card-head">
+        <h3>Rental comps</h3>
+        <span className="muted small">
+          {money(m.rent)}/mo{perUnit ? ' per unit' : ''} · range {money(m.low)}–{money(m.high)}
+        </span>
+      </div>
+      <p className="arv-method">
+        {perUnit
+          ? `Nearby ${m.beds ?? ''}-bed apartments listed for rent, used to price one unit. RentCast estimate.`
+          : 'Nearby rentals similar to this home, used for the rent estimate. RentCast estimate.'}
+      </p>
+      <div className="table-wrap">
+        <table className="tbl comps">
+          <thead>
+            <tr>
+              <th>Rental</th>
+              <th>Beds/baths</th>
+              <th>Rent</th>
+              <th>Sq ft</th>
+            </tr>
+          </thead>
+          <tbody>
+            {m.comps.map((c, i) => (
+              <tr key={c.address + i}>
+                <td>
+                  {c.address.split(',')[0]}
+                  {c.miles != null ? <span className="miles"> · {c.miles < 0.1 ? '<0.1' : c.miles.toFixed(1)} mi</span> : null}
+                </td>
+                <td>{c.beds ?? '—'}/{c.baths ?? '—'}</td>
+                <td>{money(c.rent)}</td>
+                <td>{c.sqft ? c.sqft.toLocaleString('en-US') : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="fine">Listed rents, not signed leases. Check condition and finishes against your rehab plan.</p>
+    </section>
+  );
+}
+
 function RentBreakdown({ a }: { a: Analysis }) {
   const s = a.result.stabilized;
   if (!a.rentKnown || s.grossPotentialIncome <= 0) return null;
@@ -719,6 +766,7 @@ export function App() {
               <ArvCard a={result} />
               <Kpis a={result} />
               <RentBreakdown a={result} />
+              <RentComps a={result} />
               <MakeItWork a={result} />
               {result.warnings.length > 0 && (
                 <section className="card notes reveal" style={reveal(7)}>

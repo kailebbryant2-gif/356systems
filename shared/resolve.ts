@@ -10,6 +10,7 @@ import type { TaxRate } from './sources/taxes';
 import type { StlParcel } from './sources/stlCity';
 import type { ArvEstimate } from './sources/stlComps';
 import type { LocalRent } from './rents';
+import type { RentEstimate } from './sources/rentcast';
 
 /**
  * All-in model: the student brings an all-in cost (purchase + rehab + closing, from the
@@ -66,6 +67,8 @@ export interface Analysis {
   /** Most to spend all-in: 75% of ARV. */
   maxAllInFromArv: number | null;
   arvNote: string | null;
+  /** Market rent estimate from nearby rentals, when used. */
+  marketRent: { rent: number; low: number; high: number; beds: number | null; comps: RentEstimate['comps'] } | null;
   /** Which tax figure the cash flow uses. */
   taxBasis: 'reassessed' | 'bill' | 'estimate';
   warnings: string[];
@@ -91,6 +94,8 @@ export interface ResolveArgs {
   buildingArea?: number | null;
   /** What the student knows about the property, overriding public records when entered. */
   overrides?: { units?: number | null; beds?: number | null; sqft?: number | null };
+  /** RentCast rent estimate and property record (single-family only). */
+  marketRent?: RentEstimate | null;
 }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
@@ -170,8 +175,13 @@ export function resolve(a: ResolveArgs): Analysis {
   const bedsFromListing = !!facts?.totalBeds && unitsSource === 'listing';
   const area = ov.sqft || a.buildingArea || 0;
   const areaPerUnit = area > 0 ? area / unitCount : 0;
+  // RentCast's property record beats a guess from the size (houses; for 2+ units it prices one unit).
+  const mr = a.marketRent ?? null;
+  const bedsFromMarket = unitCount === 1 && !ov.beds && !bedsFromListing && !!mr?.beds;
   const bedsPerUnit = ov.beds
     ? Math.max(1, Math.min(4, Math.round(ov.beds / unitCount)))
+    : bedsFromMarket
+    ? Math.min(4, mr!.beds!)
     : bedsFromListing
     ? Math.max(0, Math.min(4, Math.round(facts!.totalBeds! / unitCount)))
     : areaPerUnit
@@ -182,7 +192,9 @@ export function resolve(a: ResolveArgs): Analysis {
     'Bedrooms per unit',
     String(bedsPerUnit),
     ov.beds ? 'user' : bedsFromListing ? 'listing' : 'estimate',
-    ov.beds
+    bedsFromMarket
+      ? `Property record (via RentCast): ${mr!.beds} bed${mr!.baths ? ` / ${mr!.baths} bath` : ''}${mr!.sqft ? `, ${mr!.sqft.toLocaleString('en-US')} sq ft` : ''}. Records can be wrong; count only legal bedrooms (closet and egress window).`
+      : ov.beds
       ? unitCount > 1
         ? `You entered ${ov.beds} bedrooms ÷ ${unitCount} units.`
         : 'Entered by you. Count only rooms with a closet and a legal egress window; basement and attic rooms often don’t qualify.'
@@ -200,10 +212,21 @@ export function resolve(a: ResolveArgs): Analysis {
   let rentPerUnit = 0;
   let rentSource: Source = 'estimate';
   let rentNote = '';
+  // Rent estimated from nearby rentals, for the bedroom count it was estimated on.
+  const useMarket = !listedRent && !!mr && (!mr.beds || Math.min(4, mr.beds) === bedsPerUnit);
   if (listedRent) {
     rentPerUnit = listedRent / unitCount;
     rentSource = 'listing';
     rentNote = `From the listing: “${facts!.rentBasis}”.${hudPerUnit ? ` HUD benchmark for comparison: ${money(hudPerUnit)}/unit.` : ''}`;
+  } else if (useMarket) {
+    rentPerUnit = mr!.rent;
+    rentSource = 'estimate';
+    rentNote = `RentCast estimate${unitCount > 1 ? ` per ${bedsPerUnit}-bed unit` : ''} from ${mr!.comps.length} nearby ${unitCount > 1 ? 'apartment ' : ''}rentals (likely range ${money(mr!.low)}–${money(mr!.high)}).${
+      localPerUnit ? ` Rule of thumb for a ${localBeds}-bed here: ${money(localPerUnit)}.` : ''
+    }${hudPerUnit ? ` HUD benchmark: ${money(hudPerUnit)}.` : ''}`;
+    if (localPerUnit && mr!.rent > localPerUnit * 1.15) {
+      warnings.push(`The rent estimate (${money(mr!.rent)}) is well above the local rule of thumb (${money(localPerUnit)}). Check the rental comps before relying on it.`);
+    }
   } else if (localPerUnit) {
     rentPerUnit = localPerUnit;
     rentSource = 'default';
@@ -370,6 +393,7 @@ export function resolve(a: ResolveArgs): Analysis {
     arv: a.arv ?? null,
     maxAllInFromArv,
     arvNote: a.arv ? null : (a.arvNote ?? null),
+    marketRent: useMarket ? { rent: mr!.rent, low: mr!.low, high: mr!.high, beds: mr!.beds, comps: mr!.comps } : null,
     taxBasis,
     warnings,
   };

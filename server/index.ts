@@ -1,3 +1,4 @@
+import { rentEstimate, rentcastEnabled, rentcastUsage } from '../shared/sources/rentcast';
 import express from 'express';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -7,7 +8,7 @@ import { getFmr } from '../shared/sources/hud';
 import { fetchStlParcel } from '../shared/sources/stlCity';
 import { estimateArv, findSubject, suggestStlAddresses } from '../shared/sources/stlComps';
 import { effectiveTaxRate } from '../shared/sources/taxes';
-import { resolve } from '../shared/resolve';
+import { bedsFromArea, resolve } from '../shared/resolve';
 import { localRent } from '../shared/rents';
 import { countyArv, findCountyParcel, suggestCountyAddresses } from '../shared/sources/stlCounty';
 
@@ -16,6 +17,11 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '10kb' }));
 
 const withTimeout = (ms: number) => AbortSignal.timeout(ms);
+
+// How many RentCast calls this server has used this month (resets on restart).
+app.get('/api/status', (_req, res) => {
+  res.json({ rentcast: rentcastEnabled() ? rentcastUsage() : 'off (set RENTCAST_API_KEY)' });
+});
 
 app.get('/api/suggest', async (req, res) => {
   const q = String(req.query.q ?? '').trim();
@@ -91,7 +97,16 @@ app.post('/api/analyze', async (req, res) => {
     }
     if (subject?.area) buildingArea = subject.area;
     const rent = localRent({ inStlCity, cityNbhd: subject?.nbhd, zip: geo.zip });
-    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel: parcel ?? countyUnits, arv, arvNote, localRent: rent, buildingArea, overrides }));
+    // Market rent from nearby rentals (RentCast): one paid call per address, cached.
+    const recordUnits = Math.max(overrides.units ?? (parcel ?? countyUnits)?.units ?? 1, 1);
+    const area = overrides.sqft ?? buildingArea;
+    const bedsPerUnit = overrides.beds ? overrides.beds / recordUnits : area ? bedsFromArea(area / recordUnits) : 2;
+    const marketRent = await rentEstimate(
+      geo.matchedAddress,
+      { units: recordUnits, bedsPerUnit, sqftPerUnit: area ? area / recordUnits : null },
+      withTimeout(10000),
+    ).catch(() => null);
+    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel: parcel ?? countyUnits, arv, arvNote, localRent: rent, buildingArea, overrides, marketRent }));
   } catch (e) {
     console.error(`[${ref}]`, e);
     res.status(502).json({ error: 'A data source didn’t respond. Please try again in a minute.', ref });
