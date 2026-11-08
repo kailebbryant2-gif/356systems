@@ -66,6 +66,8 @@ export interface Analysis {
   /** Most to spend all-in: 75% of ARV. */
   maxAllInFromArv: number | null;
   arvNote: string | null;
+  /** Which tax figure the cash flow uses. */
+  taxBasis: 'reassessed' | 'bill' | 'estimate';
   warnings: string[];
 }
 
@@ -85,6 +87,8 @@ export interface ResolveArgs {
   arvNote?: string | null;
   /** Local St. Louis rent rule of thumb for this area, if covered. */
   localRent?: LocalRent | null;
+  /** Building living area (sq ft) from the property record, used to estimate bedrooms. */
+  buildingArea?: number | null;
 }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
@@ -93,6 +97,13 @@ const pct = (n: number, d = 1) => `${(n * 100).toFixed(d)}%`;
 export const LOAN_YEARS = 30;
 /** All-in cost (purchase + rehab + closing) target: 75% of ARV. */
 export const ALL_IN_PCT_OF_ARV = 0.75;
+/** Missouri assesses residential property at 19% of market value. */
+export const MO_RESIDENTIAL_ASSESSMENT = 0.19;
+
+/** Bedrooms from living area per unit when the record has no bedroom count. */
+export function bedsFromArea(sqftPerUnit: number): 1 | 2 | 3 | 4 {
+  return sqftPerUnit < 600 ? 1 : sqftPerUnit < 1000 ? 2 : sqftPerUnit < 1500 ? 3 : 4;
+}
 /** Cash-on-cash has no meaning with 100% financing, so only DSCR and $/unit cash flow are tested. */
 const ALL_IN_TARGETS: Targets = { ...TARGETS, minCashOnCash: -Infinity };
 
@@ -145,13 +156,22 @@ export function resolve(a: ResolveArgs): Analysis {
   add('units', 'Units', String(unitCount), unitsSource, unitsNote);
   const commercial = unitCount >= MARKET.commercialMinUnits || allIn >= MARKET.commercialMinPrice;
   const bedsFromListing = !!facts?.totalBeds && unitsSource === 'listing';
-  const bedsPerUnit = bedsFromListing ? Math.max(0, Math.min(4, Math.round(facts!.totalBeds! / unitCount))) : 2;
+  const areaPerUnit = (a.buildingArea ?? 0) > 0 ? a.buildingArea! / unitCount : 0;
+  const bedsPerUnit = bedsFromListing
+    ? Math.max(0, Math.min(4, Math.round(facts!.totalBeds! / unitCount)))
+    : areaPerUnit
+      ? bedsFromArea(areaPerUnit)
+      : 2;
   add(
     'beds',
     'Bedrooms per unit',
     String(bedsPerUnit),
     bedsFromListing ? 'listing' : 'estimate',
-    bedsFromListing ? `Listing total (${facts!.totalBeds}) ÷ units.` : 'Not stated. Assumed 2 bedrooms.',
+    bedsFromListing
+      ? `Listing total (${facts!.totalBeds}) ÷ units.`
+      : areaPerUnit
+        ? `Estimated from ${Math.round(areaPerUnit).toLocaleString('en-US')} sq ft per unit (property record): under 600 = 1 bed, 600–1,000 = 2, 1,000–1,500 = 3, over 1,500 = 4.`
+        : 'No size on record. Assumed 2 bedrooms.',
   );
 
   // ---- Rent: listing first, then the local St. Louis rule of thumb, then the HUD benchmark ----
@@ -195,10 +215,24 @@ export function resolve(a: ResolveArgs): Analysis {
     : a.taxRate
       ? a.taxRate.note
       : 'No local rate available; 1% assumed';
-  const taxes = parcel?.annualTax ?? allIn * taxRate;
+  // After the rehab the property is reassessed: ARV × 19% × this property's own rate (bill ÷ assessed value).
+  const billRate = parcel?.annualTax && parcel.assessedTotal ? parcel.annualTax / parcel.assessedTotal : null;
+  const reassessed = a.arv && billRate ? a.arv.arv * MO_RESIDENTIAL_ASSESSMENT * billRate : null;
+  const useReassessed = !!reassessed && reassessed > (parcel?.annualTax ?? 0);
+  const taxBasis: Analysis['taxBasis'] = useReassessed ? 'reassessed' : parcel?.annualTax ? 'bill' : 'estimate';
+  const taxes = useReassessed ? reassessed! : (parcel?.annualTax ?? allIn * taxRate);
   const insurance = allIn * DEFAULTS.insurancePctOfCoverage.value;
   const water = unitCount > 1 ? (DEFAULTS.waterSewerTrashPer2Units.value / 2) * unitCount : 0;
-  if (parcel?.annualTax) {
+  if (useReassessed) {
+    add(
+      'taxes',
+      'Property taxes (after rehab)',
+      `${money(taxes)}/yr`,
+      'estimate',
+      `Reassessed at ARV: ${money(a.arv!.arv)} × 19% × this property’s rate of $${(billRate! * 100).toFixed(2)} per $100 assessed (its ${parcel!.taxYear} bill of ${money(parcel!.annualTax!)} ÷ assessed value ${money(parcel!.assessedTotal!)}). Today’s bill is lower because the house hasn’t been revalued yet.`,
+    );
+    if (parcel!.abated) warnings.push('This parcel has a tax abatement. Taxes will rise when it ends; check the end date.');
+  } else if (parcel?.annualTax) {
     add('taxes', 'Property taxes', `${money(taxes)}/yr`, 'verified', `${parcel.taxYear} tax bill from the City of St. Louis Collector of Revenue (parcel ${parcel.parcelId}).`);
     if (parcel.abated) warnings.push('This parcel has a tax abatement. Taxes will rise when it ends; check the end date.');
   } else {
@@ -312,11 +346,12 @@ export function resolve(a: ResolveArgs): Analysis {
     loanOptions,
     assumptions: rows,
     listing: listingStatus,
-    lineSources: { rent: rentSource, taxes: parcel?.annualTax ? 'verified' : 'estimate', insurance: 'default', utilities: 'default', maintenance: 'default', vacancy: 'default', loan: 'default' },
+    lineSources: { rent: rentSource, taxes: taxBasis === 'bill' ? 'verified' : 'estimate', insurance: 'default', utilities: 'default', maintenance: 'default', vacancy: 'default', loan: 'default' },
     valueAdd: rentKnown ? analyzeValueAdd(base, result, DEFAULTS.incomeCapRate.value) : null,
     arv: a.arv ?? null,
     maxAllInFromArv,
     arvNote: a.arv ? null : (a.arvNote ?? null),
+    taxBasis,
     warnings,
   };
 }

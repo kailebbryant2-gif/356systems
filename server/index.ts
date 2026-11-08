@@ -60,6 +60,7 @@ app.post('/api/analyze', async (req, res) => {
     let arvNote: string | null = null;
     let arv = null;
     let countyUnits: typeof parcel = null;
+    let buildingArea: number | null = null;
     const subject = inStlCity ? findSubject({ parcelId: parcel?.parcelId, street }) : null;
     if (inStlCity) {
       arv = subject ? estimateArv(subject) : null;
@@ -67,6 +68,7 @@ app.post('/api/analyze', async (req, res) => {
     } else if (geo.stateFips === '29' && geo.countyFips === '189') {
       // St. Louis County: appraised values of similar nearby homes (no public sale prices in Missouri).
       const cp = await findCountyParcel(street, geo.zip, withTimeout(12000)).catch(() => null);
+      buildingArea = cp?.area || null;
       arv = cp ? await countyArv(cp, withTimeout(15000)).catch(() => null) : null;
       if (cp && cp.units >= 1) {
         countyUnits = { parcelId: cp.locator, units: cp.units, annualTax: null, taxYear: null, assessedTotal: null, appraisedTotal: cp.appraised, abated: false, zoning: null, yearBuilt: cp.yearBuilt };
@@ -75,8 +77,9 @@ app.post('/api/analyze', async (req, res) => {
     } else {
       arvNote = `ARV is available for St. Louis City and St. Louis County addresses only.`;
     }
+    if (subject?.area) buildingArea = subject.area;
     const rent = localRent({ inStlCity, cityNbhd: subject?.nbhd, zip: geo.zip });
-    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel: parcel ?? countyUnits, arv, arvNote, localRent: rent }));
+    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel: parcel ?? countyUnits, arv, arvNote, localRent: rent, buildingArea }));
   } catch (e) {
     console.error(`[${ref}]`, e);
     res.status(502).json({ error: 'A data source didn’t respond. Please try again in a minute.', ref });

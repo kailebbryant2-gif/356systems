@@ -544,7 +544,7 @@ function Statement({ a }: { a: Analysis }) {
             {line('Gross rent', s.grossPotentialIncome, ls.rent)}
             {line('Vacancy', s.vacancy, ls.vacancy, { neg: true })}
             {line('Effective income', s.effectiveIncome, null, { strong: true })}
-            {line('Property taxes', s.taxes, ls.taxes, { neg: true })}
+            {line(a.taxBasis === 'reassessed' ? 'Property taxes (after rehab)' : 'Property taxes', s.taxes, ls.taxes, { neg: true })}
             {line('Insurance', s.insurance, ls.insurance, { neg: true })}
             {line('Utilities (water, sewer, trash)', s.waterSewerTrash, ls.utilities, { neg: true })}
             {line('Maintenance', s.maintenance, ls.maintenance, { neg: true })}
