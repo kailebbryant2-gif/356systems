@@ -35,6 +35,12 @@ app.post('/api/analyze', async (req, res) => {
   const ref = randomUUID().slice(0, 8);
   const address = String(req.body?.address ?? '').trim();
   const allInCost = Number(req.body?.allInCost);
+  // Optional: what the student knows about the property, overriding public records.
+  const opt = (v: unknown, max: number) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) && n >= 1 && n <= max ? n : null;
+  };
+  const overrides = { units: opt(req.body?.units, 500), beds: opt(req.body?.beds, 2000), sqft: opt(req.body?.sqft, 1_000_000) };
   if (address.length < 5 || address.length > 200) return res.status(400).json({ error: 'Enter a full property address.', ref });
   if (!Number.isFinite(allInCost) || allInCost < 1000 || allInCost > 100_000_000) {
     return res.status(400).json({ error: 'Enter your all-in cost (purchase + rehab + closing) between $1,000 and $100,000,000.', ref });
@@ -61,13 +67,19 @@ app.post('/api/analyze', async (req, res) => {
     let arv = null;
     let countyUnits: typeof parcel = null;
     let buildingArea: number | null = null;
-    const subject = inStlCity ? findSubject({ parcelId: parcel?.parcelId, street }) : null;
+    const found = inStlCity ? findSubject({ parcelId: parcel?.parcelId, street }) : null;
+    const subject = found && {
+      ...found,
+      units: overrides.units ?? found.units,
+      area: overrides.sqft ?? (overrides.units && overrides.units !== found.units ? 0 : found.area),
+    };
     if (inStlCity) {
       arv = subject ? estimateArv(subject) : null;
       if (!arv) arvNote = subject ? 'Not enough recent sales of similar properties nearby to estimate ARV.' : 'Property not found in the city parcel records, so no ARV.';
     } else if (geo.stateFips === '29' && geo.countyFips === '189') {
       // St. Louis County: appraised values of similar nearby homes (no public sale prices in Missouri).
-      const cp = await findCountyParcel(street, geo.zip, withTimeout(12000)).catch(() => null);
+      const rec = await findCountyParcel(street, geo.zip, withTimeout(12000)).catch(() => null);
+      const cp = rec && { ...rec, units: overrides.units ?? rec.units, area: overrides.sqft ?? rec.area };
       buildingArea = cp?.area || null;
       arv = cp ? await countyArv(cp, withTimeout(15000)).catch(() => null) : null;
       if (cp && cp.units >= 1) {
@@ -79,7 +91,7 @@ app.post('/api/analyze', async (req, res) => {
     }
     if (subject?.area) buildingArea = subject.area;
     const rent = localRent({ inStlCity, cityNbhd: subject?.nbhd, zip: geo.zip });
-    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel: parcel ?? countyUnits, arv, arvNote, localRent: rent, buildingArea }));
+    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel: parcel ?? countyUnits, arv, arvNote, localRent: rent, buildingArea, overrides }));
   } catch (e) {
     console.error(`[${ref}]`, e);
     res.status(502).json({ error: 'A data source didn’t respond. Please try again in a minute.', ref });

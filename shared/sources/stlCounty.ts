@@ -88,6 +88,26 @@ const quantile = (xs: number[], q: number) => {
 
 export const COUNTY_MIN_COMPS = 5;
 
+/**
+ * County appraisals are mass appraisals of average-condition homes, so they lag what a renovated
+ * home sells for, and they lag most in lower-priced areas. Factors measured on community deals
+ * (MLS-backed ARV ÷ appraisal-based estimate):
+ *   inner North County, 10 deals: 1.22–1.59, median 1.37
+ *   Florissant, 3 deals: 1.04–1.26, median 1.18
+ *   Bridgeton and South County, 3 deals: 0.97–1.11, median 1.05
+ * Elsewhere there is no evidence yet, so no adjustment.
+ */
+export const COUNTY_MARKET_FACTOR: { label: string; factor: number; zips: string[] }[] = [
+  { label: 'inner North County', factor: 1.35, zips: ['63114', '63121', '63133', '63134', '63135', '63136', '63137', '63138', '63140'] },
+  { label: 'Florissant / Hazelwood', factor: 1.15, zips: ['63031', '63033', '63034', '63042'] },
+  { label: 'Bridgeton, St. Ann and South County', factor: 1.05, zips: ['63044', '63074', '63123', '63125'] },
+];
+
+export function countyMarketFactor(zip: string | null | undefined): { label: string; factor: number } | null {
+  const hit = COUNTY_MARKET_FACTOR.find((g) => zip && g.zips.includes(zip));
+  return hit ? { label: hit.label, factor: hit.factor } : null;
+}
+
 /** Pure: build an ARV from the subject and a set of neighboring parcels. */
 export function countyArvFrom(subject: CountyParcel, neighbors: CountyParcel[], ring: string): ArvEstimate | null {
   if (subject.units < 1) return null; // not a residential parcel
@@ -107,7 +127,9 @@ export function countyArvFrom(subject: CountyParcel, neighbors: CountyParcel[], 
   if (!set.length) return null;
   const value = (n: CountyParcel) =>
     perSqft ? (n.appraised / n.area) * subject.area : type === 5 ? (n.appraised / Math.max(n.units, 1)) * subject.units : n.appraised;
-  const values = set.map(value);
+  const adj = countyMarketFactor(subject.zip);
+  const f = adj?.factor ?? 1;
+  const values = set.map((n) => value(n) * f);
   const arv = Math.round(quantile(values, 0.75) / 1000) * 1000;
   const comps: Comp[] = [...set]
     .sort((a, b) => Math.abs(a.area - subject.area) - Math.abs(b.area - subject.area))
@@ -126,7 +148,9 @@ export function countyArvFrom(subject: CountyParcel, neighbors: CountyParcel[], 
     arv,
     low: Math.round(quantile(values, 0.25) / 1000) * 1000,
     high: Math.round(quantile(values, 0.9) / 1000) * 1000,
-    method: `75th percentile ${how} of ${set.length} similar ${unitWord} properties (${ring}). St. Louis County doesn’t publish sale prices, so this uses the county’s ${subject.taxYear ?? ''} appraised values, which usually run below market and don’t reflect renovations.`,
+    method: `75th percentile ${how} of ${set.length} similar ${unitWord} properties (${ring}). St. Louis County doesn’t publish sale prices, so this uses the county’s ${subject.taxYear ?? ''} appraised values, which usually run below market and don’t reflect renovations.${
+      adj ? ` Adjusted ×${f.toFixed(2)} for ${adj.label}, where renovated homes have sold for about that much over this estimate.` : ''
+    }`,
     basis: 'upper-quartile',
     perSqft,
     area: ring,

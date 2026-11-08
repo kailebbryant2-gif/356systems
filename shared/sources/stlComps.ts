@@ -6,8 +6,10 @@ import { readFileSync } from 'node:fs';
  * similar property type, same neighborhood, recent, similar size when known.
  */
 
-type SaleRow = [string, string, string, string, number, number, number, string, 'arms' | 'rehab' | 'asis', number | null];
-type ParcelRow = [string, string, string, number, number, number | null];
+/** parcelId, address, asrNbhd, nbhd, units, area, price, date, kind, yearBuilt, x, y (State Plane feet) */
+type SaleRow = [string, string, string, string, number, number, number, string, 'arms' | 'rehab' | 'asis', number | null, number | null, number | null];
+/** address, asrNbhd, nbhd, units, area, yearBuilt, x, y */
+type ParcelRow = [string, string, string, number, number, number | null, number | null, number | null];
 
 export interface Comp {
   address: string;
@@ -16,6 +18,8 @@ export interface Comp {
   units: number;
   area: number; // building sq ft, 0 if unknown
   kind: 'arms' | 'rehab' | 'asis' | 'appraised';
+  /** Distance from the subject in miles, when known. */
+  miles?: number;
 }
 
 export interface Subject {
@@ -26,6 +30,9 @@ export interface Subject {
   yearBuilt: number | null;
   /** City of St. Louis neighborhood code (1–79). */
   nbhd: string;
+  /** Parcel location (Missouri East State Plane, feet). */
+  x?: number | null;
+  y?: number | null;
 }
 
 export interface ArvEstimate {
@@ -109,8 +116,8 @@ export function findSubject(opts: { parcelId?: string | null; street?: string })
     pid = d.byAddr.get(key) ?? null;
   }
   if (!pid || !d.parcels[pid]) return null;
-  const [address, , nbhd, units, area, yearBuilt] = d.parcels[pid];
-  return { parcelId: pid, address, units, area, yearBuilt, nbhd };
+  const [address, , nbhd, units, area, yearBuilt, x, y] = d.parcels[pid];
+  return { parcelId: pid, address, units, area, yearBuilt, nbhd, x, y };
 }
 
 const quantile = (xs: number[], q: number) => {
@@ -127,19 +134,40 @@ const monthsBefore = (iso: string, months: number) => {
 };
 
 export const MIN_COMPS = 3;
+const FEET_PER_MILE = 5280;
 
+/**
+ * Comp search, nearest first, the way an MLS comp search is done: same property type, within
+ * half a mile, last 18 months; then widen to 3 years, 3/4 mile and 1 mile. Distance matters more
+ * than the assessor neighborhood, which in places like Dutchtown spans $120k and $390k blocks.
+ */
 export function estimateArv(subject: Subject): ArvEstimate | null {
   const d = load();
-  const [, asr, nbhd] = d.parcels[subject.parcelId];
+  const [, asr, nbhd] = d.parcels[subject.parcelId] ?? ['', '', subject.nbhd];
   const type = Math.min(subject.units, 5);
   const unitsOf = (pid: string, fallback: number) => d.parcels[pid]?.[3] || fallback;
   const pool = d.sales.filter((r) => r[4] === type && r[0] !== subject.parcelId);
+  const sx = subject.x ?? null;
+  const sy = subject.y ?? null;
+  const miles = (r: SaleRow) => (sx != null && sy != null && r[10] != null && r[11] != null ? Math.hypot(r[10] - sx, r[11] - sy) / FEET_PER_MILE : null);
+  const within = (mi: number) => (r: SaleRow) => {
+    const m = miles(r);
+    return m != null && m <= mi;
+  };
 
-  const rings: { label: string; pick: (r: SaleRow) => boolean; months: number }[] = [
-    { label: 'same assessor neighborhood, last 18 months', pick: (r) => r[2] === asr, months: 18 },
+  const rings: { label: string; pick: (r: SaleRow) => boolean; months: number }[] = [];
+  if (sx != null && sy != null) {
+    rings.push(
+      { label: 'within ½ mile, last 18 months', pick: within(0.5), months: 18 },
+      { label: 'within ½ mile, last 3 years', pick: within(0.5), months: 36 },
+      { label: 'within ¾ mile, last 3 years', pick: within(0.75), months: 36 },
+      { label: 'within 1 mile, last 3 years', pick: within(1), months: 36 },
+    );
+  }
+  rings.push(
     { label: 'same assessor neighborhood, last 3 years', pick: (r) => r[2] === asr, months: 36 },
     { label: 'same city neighborhood, last 3 years', pick: (r) => r[3] === nbhd, months: 36 },
-  ];
+  );
   // Apartment buildings trade rarely; value them on city-wide price per unit as a last resort.
   if (type === 5) rings.push({ label: 'all of St. Louis City, last 3 years, per unit', pick: () => true, months: 36 });
 
@@ -161,8 +189,11 @@ export function estimateArv(subject: Subject): ArvEstimate | null {
     const values = basisSet.map(value);
     const arv = Math.round((useRehab ? quantile(values, 0.5) : quantile(values, 0.75)) / 1000) * 1000;
     const comps = [...basisSet]
-      .sort((a, b) => b[7].localeCompare(a[7]))
-      .map((r): Comp => ({ address: r[1], date: r[7], price: r[6], units: unitsOf(r[0], r[4]), area: r[5], kind: r[8] }));
+      .sort((a, b) => (miles(a) ?? 9) - (miles(b) ?? 9) || b[7].localeCompare(a[7]))
+      .map((r): Comp => {
+        const m = miles(r);
+        return { address: r[1], date: r[7], price: r[6], units: unitsOf(r[0], r[4]), area: r[5], kind: r[8], ...(m != null ? { miles: Math.round(m * 100) / 100 } : {}) };
+      });
 
     const unitWord = type === 1 ? 'single-family' : type === 5 ? '5+ unit' : `${type}-unit`;
     const how = perSqft ? `price per sq ft × ${subject.area.toLocaleString('en-US')} sq ft` : type === 5 ? `price per unit × ${subject.units} units` : 'sale price';

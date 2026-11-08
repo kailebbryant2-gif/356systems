@@ -1,0 +1,230 @@
+{
+  "note": "Community wholesale deals used to calibrate ARV. arv = the consensus after-repair value (wholesaler figure checked against the MLS comps that came with the deal). sqft/beds/units as stated in the deal post, which often differ from public records.",
+  "city": [
+    {
+      "address": "4052 SCHILLER PL",
+      "zip": "63116",
+      "arv": 195000,
+      "beds": null,
+      "sqft": null,
+      "note": "size uncertain; wholesaler says bigger than records"
+    },
+    {
+      "address": "2915 KEOKUK ST",
+      "zip": "63118",
+      "arv": 255000,
+      "beds": 4,
+      "sqft": 2056
+    },
+    {
+      "address": "3410 DUNNICA AV",
+      "zip": "63118",
+      "arv": 245000,
+      "beds": 3,
+      "sqft": 1970,
+      "note": "records say 2 units"
+    },
+    {
+      "address": "3928 MINNESOTA AV",
+      "zip": "63118",
+      "arv": 235000,
+      "beds": 4,
+      "sqft": 2058
+    },
+    {
+      "address": "4050 MCDONALD AV",
+      "zip": "63116",
+      "arv": 245000,
+      "beds": 2,
+      "sqft": 1029
+    },
+    {
+      "address": "2813 MERAMEC ST",
+      "zip": "63118",
+      "arv": 220000,
+      "beds": 4,
+      "sqft": 2146
+    },
+    {
+      "address": "4667 LOUISIANA AV",
+      "zip": "63111",
+      "arv": 180000,
+      "beds": 3,
+      "sqft": 1505
+    },
+    {
+      "address": "2833 SIDNEY ST",
+      "zip": "63104",
+      "arv": 400000,
+      "beds": null,
+      "sqft": null,
+      "note": "Fox Park full gut"
+    },
+    {
+      "address": "7710 TENNESSEE AV",
+      "zip": "63111",
+      "arv": 160000,
+      "beds": 3,
+      "sqft": null
+    },
+    {
+      "address": "3832 IOWA AV",
+      "zip": "63118",
+      "arv": 210000,
+      "beds": 3,
+      "sqft": 1936
+    },
+    {
+      "address": "3141 CHIPPEWA ST",
+      "zip": "63118",
+      "arv": 140000,
+      "beds": null,
+      "sqft": null
+    },
+    {
+      "address": "8212 MINNESOTA AV",
+      "zip": "63111",
+      "arv": 165000,
+      "beds": 3,
+      "sqft": 1250
+    },
+    {
+      "address": "3936 CALIFORNIA AV",
+      "zip": "63118",
+      "arv": 217000,
+      "beds": 4,
+      "sqft": 2288
+    }
+  ],
+  "county": [
+    {
+      "address": "3757 MIDVIEW AVE",
+      "zip": "63044",
+      "arv": 250000,
+      "beds": 3,
+      "sqft": 1224,
+      "appraisalEstimate": 237000
+    },
+    {
+      "address": "2639 CARSON RD",
+      "zip": "63114",
+      "arv": 155000,
+      "beds": 4,
+      "sqft": 1395,
+      "appraisalEstimate": 115000
+    },
+    {
+      "address": "10424 COUNT DR",
+      "zip": "63136",
+      "arv": 135000,
+      "beds": 3,
+      "sqft": 912,
+      "appraisalEstimate": 86000
+    },
+    {
+      "address": "3250 N WATERFORD DR",
+      "zip": "63033",
+      "arv": 268000,
+      "beds": null,
+      "sqft": null,
+      "appraisalEstimate": 228000
+    },
+    {
+      "address": "9926 CLYDE AVE",
+      "zip": "63125",
+      "arv": 170000,
+      "beds": 2,
+      "sqft": 1066,
+      "appraisalEstimate": 176000
+    },
+    {
+      "address": "1077 FONTAINE PL",
+      "zip": "63137",
+      "arv": 150000,
+      "beds": 2,
+      "sqft": 982,
+      "appraisalEstimate": 113000
+    },
+    {
+      "address": "160 REASOR DR",
+      "zip": "63135",
+      "arv": 117000,
+      "beds": 2,
+      "sqft": null,
+      "appraisalEstimate": 83000
+    },
+    {
+      "address": "10209 EDGEFIELD DR",
+      "zip": "63136",
+      "arv": 148000,
+      "beds": 3,
+      "sqft": 988,
+      "appraisalEstimate": 108000
+    },
+    {
+      "address": "1271 DARR DR",
+      "zip": "63137",
+      "arv": 130000,
+      "beds": 3,
+      "sqft": 912,
+      "appraisalEstimate": 95000
+    },
+    {
+      "address": "410 N ELIZABETH AVE",
+      "zip": "63135",
+      "arv": 142000,
+      "beds": 3,
+      "sqft": null,
+      "appraisalEstimate": 116000
+    },
+    {
+      "address": "157 ANISTASIA DR",
+      "zip": "63135",
+      "arv": 155000,
+      "beds": 2,
+      "sqft": 1043,
+      "appraisalEstimate": 118000
+    },
+    {
+      "address": "4314 METARUS DR",
+      "zip": "63033",
+      "arv": 255000,
+      "beds": 3,
+      "sqft": 1354,
+      "appraisalEstimate": 202000
+    },
+    {
+      "address": "7213 TEAL AVE",
+      "zip": "63133",
+      "arv": 155000,
+      "beds": 4,
+      "sqft": 1146,
+      "appraisalEstimate": 115000
+    },
+    {
+      "address": "10033 BARON DR",
+      "zip": "63136",
+      "arv": 100000,
+      "beds": 2,
+      "sqft": null,
+      "appraisalEstimate": 63000
+    },
+    {
+      "address": "111 W LORETTA AVE",
+      "zip": "63125",
+      "arv": 160000,
+      "beds": 2,
+      "sqft": null,
+      "appraisalEstimate": 144000
+    },
+    {
+      "address": "1700 SAINT DENIS ST",
+      "zip": "63033",
+      "arv": 265000,
+      "beds": 3,
+      "sqft": 1754,
+      "appraisalEstimate": 255000
+    }
+  ],
+  "countyNote": "appraisalEstimate = Dealwise County estimate before the area adjustment (75th pct appraised $/sq ft of similar homes), measured Nov 2026."
+}

@@ -89,6 +89,8 @@ export interface ResolveArgs {
   localRent?: LocalRent | null;
   /** Building living area (sq ft) from the property record, used to estimate bedrooms. */
   buildingArea?: number | null;
+  /** What the student knows about the property, overriding public records when entered. */
+  overrides?: { units?: number | null; beds?: number | null; sqft?: number | null };
 }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
@@ -133,10 +135,20 @@ export function resolve(a: ResolveArgs): Analysis {
   // ---- Units and beds (needed to apply rent and utilities) ----
   const listedRent = facts?.monthlyRent ?? null;
   const parcel = a.parcel ?? null;
-  let unitCount = parcel?.units ?? facts?.units ?? null;
-  let unitsSource: Source = parcel?.units ? 'verified' : 'listing';
-  let unitsNote = parcel?.units ? `Official property record (parcel ${parcel.parcelId}).` : 'Stated in the listing.';
-  if (parcel?.units && facts?.units && facts.units !== parcel.units) {
+  const ov = a.overrides ?? {};
+  let unitCount = ov.units || (parcel?.units ?? facts?.units ?? null);
+  let unitsSource: Source = ov.units ? 'user' : parcel?.units ? 'verified' : 'listing';
+  let unitsNote = ov.units
+    ? parcel?.units && parcel.units !== ov.units
+      ? `Entered by you. The property record says ${parcel.units}; confirm with the zoning and occupancy permit.`
+      : 'Entered by you.'
+    : parcel?.units
+      ? `Official property record (parcel ${parcel.parcelId}).`
+      : 'Stated in the listing.';
+  if (ov.units && parcel?.units && parcel.units !== ov.units) {
+    warnings.push(`You entered ${ov.units} unit${ov.units > 1 ? 's' : ''}; the property record says ${parcel.units}. Lenders and appraisers go by the legal unit count, so confirm it.`);
+  }
+  if (!ov.units && parcel?.units && facts?.units && facts.units !== parcel.units) {
     warnings.push(`The listing says ${facts.units} units but the city record says ${parcel.units}. Using the city record.`);
   }
   if (!unitCount) {
@@ -156,8 +168,11 @@ export function resolve(a: ResolveArgs): Analysis {
   add('units', 'Units', String(unitCount), unitsSource, unitsNote);
   const commercial = unitCount >= MARKET.commercialMinUnits || allIn >= MARKET.commercialMinPrice;
   const bedsFromListing = !!facts?.totalBeds && unitsSource === 'listing';
-  const areaPerUnit = (a.buildingArea ?? 0) > 0 ? a.buildingArea! / unitCount : 0;
-  const bedsPerUnit = bedsFromListing
+  const area = ov.sqft || a.buildingArea || 0;
+  const areaPerUnit = area > 0 ? area / unitCount : 0;
+  const bedsPerUnit = ov.beds
+    ? Math.max(1, Math.min(4, Math.round(ov.beds / unitCount)))
+    : bedsFromListing
     ? Math.max(0, Math.min(4, Math.round(facts!.totalBeds! / unitCount)))
     : areaPerUnit
       ? bedsFromArea(areaPerUnit)
@@ -166,11 +181,15 @@ export function resolve(a: ResolveArgs): Analysis {
     'beds',
     'Bedrooms per unit',
     String(bedsPerUnit),
-    bedsFromListing ? 'listing' : 'estimate',
-    bedsFromListing
+    ov.beds ? 'user' : bedsFromListing ? 'listing' : 'estimate',
+    ov.beds
+      ? unitCount > 1
+        ? `You entered ${ov.beds} bedrooms ÷ ${unitCount} units.`
+        : 'Entered by you. Count only rooms with a closet and a legal egress window; basement and attic rooms often don’t qualify.'
+      : bedsFromListing
       ? `Listing total (${facts!.totalBeds}) ÷ units.`
       : areaPerUnit
-        ? `Estimated from ${Math.round(areaPerUnit).toLocaleString('en-US')} sq ft per unit (property record): under 600 = 1 bed, 600–1,000 = 2, 1,000–1,500 = 3, over 1,500 = 4.`
+        ? `Estimated from ${Math.round(areaPerUnit).toLocaleString('en-US')} sq ft per unit (${ov.sqft ? 'size you entered' : 'property record'}): under 600 = 1 bed, 600–1,000 = 2, 1,000–1,500 = 3, over 1,500 = 4.`
         : 'No size on record. Assumed 2 bedrooms.',
   );
 

@@ -30,9 +30,11 @@ describe('ARV from City of St. Louis sales (bundled data)', () => {
     expect(e.comps.some((c) => c.address.toUpperCase() === s.address)).toBe(false);
     expect(e.low).toBeLessThanOrEqual(e.arv);
     expect(e.arv).toBeLessThanOrEqual(e.high);
-    // comps are newest first
-    const dates = e.comps.map((c) => c.date);
-    expect([...dates].sort().reverse()).toEqual(dates);
+    // comps are nearest first, all within the ring's distance
+    const miles = e.comps.map((c) => c.miles!);
+    expect([...miles].sort((a, b) => a - b)).toEqual(miles);
+    expect(e.area).toMatch(/within/);
+    expect(Math.max(...miles)).toBeLessThanOrEqual(1);
   });
 
   it('values 5+ unit buildings per unit when nearby sales are scarce', () => {

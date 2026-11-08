@@ -76,7 +76,23 @@ def dbf_rows(data, want):
         r = data[hl + i * rl: hl + (i + 1) * rl]
         if not r or r[:1] == b'*':
             continue
-        yield {k: r[o:o + l].decode('latin1').strip() for k, (o, l) in fields.items()}
+        row = {k: r[o:o + l].decode('latin1').strip() for k, (o, l) in fields.items()}
+        row['_i'] = i
+        yield row
+
+
+def shp_centers(data):
+    """Record index → (x, y) bounding-box center, in Missouri East State Plane feet."""
+    out, pos, i = {}, 100, 0
+    while pos + 8 <= len(data):
+        _, clen = struct.unpack('>2i', data[pos:pos + 8])
+        st = struct.unpack('<i', data[pos + 8:pos + 12])[0]
+        if st != 0:
+            x0, y0, x1, y1 = struct.unpack('<4d', data[pos + 12:pos + 44])
+            out[i] = (round((x0 + x1) / 2), round((y0 + y1) / 2))
+        pos += 8 + clen * 2
+        i += 1
+    return out
 
 
 def num(s):
@@ -92,9 +108,11 @@ def main():
 
     parcels = {}
     want = {'ParcelId', 'SITEADDR', 'ASRNBRHD', 'NBRHD', 'NbrOfUnits', 'LastYearBu'}
+    centers = shp_centers(parcels_zip.read('Parcels.shp'))
     for r in dbf_rows(parcels_zip.read('Parcels.dbf'), want):
         pid = r['ParcelId']
         if pid:
+            r['xy'] = centers.get(r['_i'])
             parcels[pid] = r
 
     sales, area = [], {}
@@ -132,6 +150,7 @@ def main():
             d.isoformat(),
             kind,
             int(num(s.get('YearBuilt'))) or None,
+            *(p['xy'] or (None, None)),
         ])
 
     parcel_out = {}
@@ -146,14 +165,15 @@ def main():
             units,
             int(area.get(pid, 0)),
             int(num(p['LastYearBu'])) or None,
+            *(p['xy'] or (None, None)),
         ]
 
     os.makedirs(OUT, exist_ok=True)
     meta = {'source': 'City of St. Louis Assessor open data', 'latestSale': latest.isoformat(), 'built': date.today().isoformat()}
     with open(os.path.join(OUT, 'stl-sales.json'), 'w') as f:
-        json.dump({'meta': meta, 'fields': ['parcelId', 'address', 'asrNbhd', 'nbhd', 'units', 'area', 'price', 'date', 'kind', 'yearBuilt'], 'rows': comps}, f, separators=(',', ':'))
+        json.dump({'meta': meta, 'fields': ['parcelId', 'address', 'asrNbhd', 'nbhd', 'units', 'area', 'price', 'date', 'kind', 'yearBuilt', 'x', 'y'], 'rows': comps}, f, separators=(',', ':'))
     with open(os.path.join(OUT, 'stl-parcels.json'), 'w') as f:
-        json.dump({'meta': meta, 'fields': ['address', 'asrNbhd', 'nbhd', 'units', 'area', 'yearBuilt'], 'rows': parcel_out}, f, separators=(',', ':'))
+        json.dump({'meta': meta, 'fields': ['address', 'asrNbhd', 'nbhd', 'units', 'area', 'yearBuilt', 'x', 'y'], 'rows': parcel_out}, f, separators=(',', ':'))
     print(f'{len(comps)} comp sales since {cutoff}, latest {latest}; {len(parcel_out)} parcels ({sum(1 for v in parcel_out.values() if v[4])} with building area)')
 
 

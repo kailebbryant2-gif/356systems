@@ -253,7 +253,8 @@ function ArvCard({ a }: { a: Analysis }) {
               <tr key={c.address + c.date}>
                 <td>
                   {c.address}
-                  {c.units > 1 ? ` · ${c.units} units` : ''} <span className={`kind kind-${c.kind}`}>{KIND_LABEL[c.kind]}</span>
+                  {c.units > 1 ? ` · ${c.units} units` : ''}
+                  {c.miles != null ? <span className="miles"> · {c.miles < 0.1 ? '<0.1' : c.miles.toFixed(1)} mi</span> : null} <span className={`kind kind-${c.kind}`}>{KIND_LABEL[c.kind]}</span>
                 </td>
                 <td>{v.source === 'county-appraisal' ? c.date.slice(0, 4) : date(c.date)}</td>
                 <td>{money(c.price)}</td>
@@ -266,7 +267,7 @@ function ArvCard({ a }: { a: Analysis }) {
       <p className="fine">
         {v.source === 'county-appraisal'
           ? 'Appraised values aren’t sale prices: they usually run below market and ignore renovations. Pull real sold comps (e.g. Redfin) before you offer.'
-          : 'Sales records don’t show condition or finishes, so check these comps against your rehab scope. Underwrite at the low end if your finishes won’t match the renovated sales.'} {v.compCount > v.comps.length ? `Showing the ${v.comps.length} ${v.source === 'county-appraisal' ? 'closest in size' : 'most recent'} of ${v.compCount}.` : ''}
+          : 'Sales records don’t show condition or finishes, so check these comps against your rehab scope. Underwrite at the low end if your finishes won’t match the renovated sales.'} {v.compCount > v.comps.length ? `Showing the ${v.comps.length} ${v.source === 'county-appraisal' ? 'closest in size' : 'closest'} of ${v.compCount}.` : ''}
       </p>
     </section>
   );
@@ -601,6 +602,9 @@ const STEPS = ['Finding the property', 'Pulling nearby sales', 'Estimating ARV',
 export function App() {
   const [address, setAddress] = useState('');
   const [allIn, setAllIn] = useState('');
+  const [beds, setBeds] = useState('');
+  const [units, setUnits] = useState('');
+  const [sqft, setSqft] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -626,7 +630,13 @@ export function App() {
       const r = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ address, allInCost: v }),
+        body: JSON.stringify({
+          address,
+          allInCost: v,
+          beds: Number(beds) || undefined,
+          units: Number(units) || undefined,
+          sqft: Number(sqft.replace(/,/g, '')) || undefined,
+        }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.ref ? `${d.error} (ref ${d.ref})` : d.error);
@@ -681,6 +691,33 @@ export function App() {
                 }}
               />
             </div>
+            <details className="facts" open={!!(beds || units || sqft)}>
+              <summary>Know the property better than public records? <span className="opt">optional</span></summary>
+              <div className="facts-grid">
+                <label>
+                  Bedrooms
+                  <input className="input" inputMode="numeric" placeholder="auto" value={beds} onChange={(e) => setBeds(e.target.value.replace(/[^\d]/g, '').slice(0, 3))} />
+                </label>
+                <label>
+                  Units
+                  <input className="input" inputMode="numeric" placeholder="auto" value={units} onChange={(e) => setUnits(e.target.value.replace(/[^\d]/g, '').slice(0, 3))} />
+                </label>
+                <label>
+                  Sq ft
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    placeholder="auto"
+                    value={sqft}
+                    onChange={(e) => {
+                      const d = e.target.value.replace(/[^\d]/g, '').slice(0, 6);
+                      setSqft(d ? Number(d).toLocaleString('en-US') : '');
+                    }}
+                  />
+                </label>
+              </div>
+              <p className="form-hint">Total bedrooms for the whole property. Records are often wrong on bedrooms, units and size. What you enter here drives the rent and the ARV comps.</p>
+            </details>
             <p className="form-hint">
               Use your underwriting spreadsheet for the all-in cost; the loan equals it on a 30-year mortgage. For St. Louis City and
               County addresses we also estimate the ARV and check you’re at or under 75% of it.

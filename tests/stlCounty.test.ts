@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { countyArvFrom, type CountyParcel } from '../shared/sources/stlCounty';
 
 const p = (over: Partial<CountyParcel>): CountyParcel => ({
-  locator: Math.random().toString(36).slice(2), address: '1 TEST DR', zip: '63135', units: 1, area: 1000,
+  locator: Math.random().toString(36).slice(2), address: '1 TEST DR', zip: '63105', units: 1, area: 1000,
   yearBuilt: 1955, appraised: 100000, nbhd: 'N1', municipality: 'FERGUSON', taxYear: 2026, ...over,
 });
 
@@ -30,6 +30,12 @@ describe('St. Louis County ARV from appraised values', () => {
     const e = countyArvFrom(subject, dupes, 'x')!;
     expect(e.compCount).toBe(6);
     expect(new Set(e.comps.map((c) => c.address + c.price)).size).toBe(e.comps.length);
+  });
+
+  it('applies the measured area factor where appraisals lag the market (inner North County ×1.35)', () => {
+    const e = countyArvFrom({ ...subject, zip: '63135' }, neighbors.map((n) => ({ ...n, zip: '63135' })), 'x')!;
+    expect(e.arv).toBe(Math.round((117.5 * 1000 * 1.35) / 1000) * 1000);
+    expect(e.method).toMatch(/×1\.35 for inner North County/);
   });
 
   it('needs at least 5 similar properties', () => {
