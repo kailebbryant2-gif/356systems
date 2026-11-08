@@ -84,6 +84,10 @@ function AddressInput({ value, onChange }: { value: string; onChange: (v: string
         id="address"
         className="input"
         autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="words"
+        spellCheck={false}
+        enterKeyHint="next"
         placeholder="4321 Arsenal St, St. Louis, MO"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -108,7 +112,7 @@ function AddressInput({ value, onChange }: { value: string; onChange: (v: string
               role="option"
               aria-selected={i === active}
               className={i === active ? 'active' : ''}
-              onMouseDown={(e) => { e.preventDefault(); pick(s); }}
+              onPointerDown={(e) => { e.preventDefault(); pick(s); }}
             >
               <IconPin /> <span>{s}</span>
             </li>

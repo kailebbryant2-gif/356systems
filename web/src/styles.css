@@ -109,7 +109,7 @@ body {
   list-style: none; margin: 0; padding: 6px; background: #fff; border: 1px solid var(--line);
   border-radius: 12px; box-shadow: var(--shadow-lg); animation: up 0.15s ease-out both;
 }
-.combo-list li { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--muted); }
+.combo-list li { display: flex; gap: 10px; align-items: center; padding: 12px; min-height: 44px; touch-action: manipulation; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--muted); }
 .combo-list li span { color: var(--text); }
 .combo-list li:hover, .combo-list li.active { background: var(--accent-tint); }
 
