@@ -8,6 +8,7 @@
     "build": "vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "test": "vitest run",
+    "update-data": "python3 scripts/build-stl-data.py",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

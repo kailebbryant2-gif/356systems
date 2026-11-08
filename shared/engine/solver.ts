@@ -37,7 +37,8 @@ export function checks(result: DealResult, targets: Targets): Check[] {
       id: 'dscr',
       label: 'Debt coverage (DSCR)',
       target: `≥ ${targets.minDscr.toFixed(2)}`,
-      actual: Number.isFinite(s.dscr) ? s.dscr.toFixed(2) : 'No loan',
+      // Truncate so a value just under the target never displays as the target.
+      actual: Number.isFinite(s.dscr) ? (Math.floor(s.dscr * 100) / 100).toFixed(2) : 'No loan',
       pass: s.dscr >= targets.minDscr,
     },
     {

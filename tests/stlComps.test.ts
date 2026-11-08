@@ -1,0 +1,51 @@
+import { describe, expect, it } from 'vitest';
+import { estimateArv, findSubject, normalizeParcelId, MIN_COMPS } from '../shared/sources/stlComps';
+import { resolve, ALL_IN_PCT_OF_ARV } from '../shared/resolve';
+
+describe('ARV from City of St. Louis sales (bundled data)', () => {
+  it('normalizes the parcel id shown on the city site', () => {
+    expect(normalizeParcelId('1488-9-070.000')).toBe('14889070000');
+  });
+
+  it('finds a property by parcel id or by street address', () => {
+    const byId = findSubject({ parcelId: '1488-9-070.000' });
+    const byStreet = findSubject({ street: '3520 Wyoming St' });
+    expect(byId?.parcelId).toBe('14889070000');
+    expect(byStreet?.parcelId).toBe('14889070000');
+    expect(byId?.units).toBe(1);
+  });
+
+  it('builds ARV from at least 3 comparable sales of the same type, excluding the property itself', () => {
+    const s = findSubject({ street: '3520 WYOMING ST' })!;
+    const e = estimateArv(s)!;
+    expect(e.compCount).toBeGreaterThanOrEqual(MIN_COMPS);
+    expect(e.comps.every((c) => c.units === 1)).toBe(true);
+    expect(e.comps.some((c) => c.address.toUpperCase() === s.address)).toBe(false);
+    expect(e.low).toBeLessThanOrEqual(e.arv);
+    expect(e.arv).toBeLessThanOrEqual(e.high);
+    // comps are newest first
+    const dates = e.comps.map((c) => c.date);
+    expect([...dates].sort().reverse()).toEqual(dates);
+  });
+
+  it('values 5+ unit buildings per unit when nearby sales are scarce', () => {
+    const s = findSubject({ street: '3646 ILLINOIS AV' })!;
+    expect(s.units).toBeGreaterThanOrEqual(5);
+    expect(estimateArv(s)!.method).toMatch(/per unit/);
+  });
+
+  it('all-in cost = 75% of ARV, and the loan equals it', () => {
+    const s = findSubject({ street: '3520 WYOMING ST' })!;
+    const arv = estimateArv(s)!;
+    const allIn = Math.round((arv.arv * ALL_IN_PCT_OF_ARV) / 1000) * 1000;
+    const geo = {
+      matchedAddress: '3520 WYOMING ST, SAINT LOUIS, MO, 63118', houseNumber: '3520', streetName: 'WYOMING', city: 'SAINT LOUIS',
+      state: 'MO', zip: '63118', stateFips: '29', countyFips: '510', countyName: 'St. Louis city', lat: 38.59, lon: -90.24,
+    };
+    const a = resolve({ inputAddress: 'x', geo, allInCost: allIn, listing: null, fmr: null, fmrError: null, taxRate: null, arv });
+    expect(a.allInCost).toBe(allIn);
+    expect(a.loan.amount).toBe(allIn);
+    expect(a.arv?.arv).toBe(arv.arv);
+    expect(a.assumptions.find((r) => r.key === 'arv')!.source).toBe('estimate');
+  });
+});

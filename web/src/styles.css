@@ -252,7 +252,7 @@ body {
 .tbl { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
 .tbl th { text-align: right; color: var(--faint); font-weight: 500; font-size: 12px; padding: 6px 4px; }
 .tbl td { padding: 8px 4px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
-.tbl td:first-child { text-align: left; white-space: normal; }
+.tbl td:first-child, .tbl th:first-child { text-align: left; white-space: normal; }
 .tbl tr.strong td { font-weight: 600; }
 .tbl .ratios td { color: var(--muted); }
 .tbl-wide td, .tbl-wide th { padding-left: 10px; }
@@ -287,6 +287,14 @@ body {
 .form-hint { margin: 8px 0 0; color: var(--faint); font-size: 12.5px; }
 .fin-static .fin-row { display: grid; gap: 10px; padding: 12px 14px; }
 @media (min-width: 620px) { .fin-static .fin-row { grid-template-columns: 1fr auto; align-items: center; } }
+
+.arv-method { margin: 12px 0 4px; color: var(--muted); font-size: 13px; }
+.muted-strong { color: var(--muted); font-size: 15px !important; }
+.comps td:first-child { white-space: normal; }
+.kind { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 5px; margin-left: 4px; vertical-align: 1px; }
+.kind-rehab { background: var(--accent-tint); color: var(--accent); }
+.kind-arms { background: #eef1f5; color: #55657c; }
+.kind-asis { background: #fff1d6; color: #9a5b00; }
 
 /* ---------- Value ---------- */
 .value-hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 14px; border-radius: 12px; background: var(--soft); }

@@ -23,8 +23,6 @@ const Icon = ({ d, size = 18 }: { d: ReactNode; size?: number }) => (
   </svg>
 );
 const IconPin = () => <Icon d={<><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></>} />;
-const IconDollar = () => <Icon d={<><path d="M12 3v18" /><path d="M16.5 7.5c-.8-1.3-2.4-2-4.5-2-2.6 0-4 1.3-4 3s1.6 2.5 4 3 4 1.4 4 3.2-1.5 3.3-4.2 3.3c-2 0-3.7-.8-4.6-2.2" /></>} />;
-const IconLink = () => <Icon d={<><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>} />;
 const IconArrow = () => <Icon d={<><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></>} />;
 const IconCheck = () => <Icon size={16} d={<path d="M5 12.5l4.5 4.5L19 7.5" />} />;
 const IconTag = () => <Icon d={<><path d="M3 12V4h8l10 10-8 8z" /><circle cx="7.5" cy="8.5" r="1.3" /></>} />;
@@ -46,6 +44,7 @@ function AddressInput({ value, onChange }: { value: string; onChange: (v: string
   const [active, setActive] = useState(-1);
   const timer = useRef<number | undefined>(undefined);
   const lastPicked = useRef('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     window.clearTimeout(timer.current);
@@ -59,7 +58,8 @@ function AddressInput({ value, onChange }: { value: string; onChange: (v: string
         const r = await fetch(`/api/suggest?q=${encodeURIComponent(value)}`, { signal: ctrl.signal });
         const d = await r.json();
         setItems((d.suggestions ?? []).map((s: { label: string }) => s.label));
-        setOpen(true);
+        // Only open if the user is still in the field (a late response mustn't cover the results).
+        setOpen(document.activeElement === inputRef.current);
         setActive(-1);
       } catch {
         /* suggestions are optional */
@@ -79,6 +79,7 @@ function AddressInput({ value, onChange }: { value: string; onChange: (v: string
     <div className="combo field">
       <span className="field-icon"><IconPin /></span>
       <input
+        ref={inputRef}
         id="address"
         className="input"
         autoComplete="off"
@@ -162,7 +163,8 @@ function Verdict({ a }: { a: Analysis }) {
           </div>
           <h2>{a.verdict.headline}</h2>
           <p className="muted">
-            {a.address.matched} · {money(a.allInCost)} all-in
+            {a.address.matched}
+            {a.arv ? ` · ARV ${money(a.arv.arv)} · all-in ${money(a.allInCost)} (75%)` : ` · ${money(a.allInCost)} all-in`}
           </p>
         </div>
       </div>
@@ -179,6 +181,68 @@ function Verdict({ a }: { a: Analysis }) {
       {a.verdict.confidenceReasons.length > 0 && (
         <p className="fine">Confidence is {a.verdict.confidence} because: {a.verdict.confidenceReasons.join(' · ')}.</p>
       )}
+    </section>
+  );
+}
+
+const KIND_LABEL = { rehab: 'Renovated', arms: 'Open market', asis: 'As-is' } as const;
+
+function ArvCard({ a }: { a: Analysis }) {
+  const v = a.arv;
+  if (!v) return null;
+  const date = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return (
+    <section className="card reveal" style={reveal(1)}>
+      <div className="card-head">
+        <h3>After-repair value from nearby sales</h3>
+        <span className="muted small">City of St. Louis sales records through {date(v.latestSale)}</span>
+      </div>
+      <div className="value-hero">
+        <div>
+          <span>ARV</span>
+          <strong>{money(v.arv)}</strong>
+        </div>
+        <div>
+          <span>Range of comps</span>
+          <strong className="muted-strong">
+            {money(v.low)} – {money(v.high)}
+          </strong>
+        </div>
+        <div>
+          <span>All-in cost (75% of ARV)</span>
+          <strong className="pos">{money(a.allInCost)}</strong>
+        </div>
+      </div>
+      <p className="arv-method">{v.method}</p>
+      <div className="table-wrap">
+        <table className="tbl comps">
+          <thead>
+            <tr>
+              <th>Comparable sale</th>
+              <th>Sold</th>
+              <th>Price</th>
+              <th>Sq ft</th>
+            </tr>
+          </thead>
+          <tbody>
+            {v.comps.map((c) => (
+              <tr key={c.address + c.date}>
+                <td>
+                  {c.address}
+                  {c.units > 1 ? ` · ${c.units} units` : ''} <span className={`kind kind-${c.kind}`}>{KIND_LABEL[c.kind]}</span>
+                </td>
+                <td>{date(c.date)}</td>
+                <td>{money(c.price)}</td>
+                <td>{c.area ? c.area.toLocaleString('en-US') : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="fine">
+        Sales records don’t show condition or finishes, so check these comps against your rehab scope. Underwrite at the low end if
+        your finishes won’t match the renovated sales. {v.compCount > v.comps.length ? `Showing the ${v.comps.length} most recent of ${v.compCount}.` : ''}
+      </p>
     </section>
   );
 }
@@ -209,7 +273,7 @@ function Kpis({ a }: { a: Analysis }) {
       sub: 'lenders want 1.20+',
       meter: known && <Meter value={s.dscr} target={1.2} max={1.8} />,
     },
-    { label: 'Loan', value: money(a.loan.amount), sub: `= all-in cost · ${a.loan.years} yrs`, meter: null },
+    { label: 'Loan', value: money(a.loan.amount), sub: `= all-in (75% of ARV) · ${a.loan.years} yrs`, meter: null },
     { label: 'Mortgage', value: `${money(a.loan.monthlyPayment)}`, sub: `per month at ${pct(a.loan.rate, 1)}`, meter: null },
   ];
   return (
@@ -296,7 +360,7 @@ function MakeItWork({ a }: { a: Analysis }) {
       title: 'Rent it needs',
       value: sol.requiredMonthlyRent ? money(sol.requiredMonthlyRent) : '—',
       text: sol.requiredMonthlyRent
-        ? `${money(sol.requiredMonthlyRent / a.units)}/unit${a.rentKnown ? ` vs ${money(rent / a.units)} modeled` : ''}. Check your Zillow rental comps.`
+        ? `${money(sol.requiredMonthlyRent / a.units)}/unit${a.rentKnown ? ` vs ${money(rent / a.units)} modeled` : ''}. Check rental comps.`
         : 'Not solvable at this all-in cost.',
     },
     {
@@ -507,12 +571,10 @@ function Assumptions({ a }: { a: Analysis }) {
 
 // ---------------- App ----------------
 
-const STEPS = ['Finding the property', 'Reading rental comps', 'Pulling market rents', 'Estimating expenses', 'Running the numbers'];
+const STEPS = ['Finding the property', 'Pulling nearby sales', 'Estimating ARV', 'Pulling taxes & rents', 'Running the numbers'];
 
 export function App() {
   const [address, setAddress] = useState('');
-  const [allIn, setAllIn] = useState('');
-  const [link, setLink] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -529,16 +591,14 @@ export function App() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const v = Number(allIn.replace(/,/g, ''));
     if (address.trim().length < 5) return setError('Enter the property address.');
-    if (!v) return setError('Enter your all-in cost.');
     setLoading(true);
     setResult(null);
     try {
       const r = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ address, allInCost: v, listingUrl: link.trim() }),
+        body: JSON.stringify({ address }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.ref ? `${d.error} (ref ${d.ref})` : d.error);
@@ -570,51 +630,16 @@ export function App() {
             <h1>
               Know if a deal works <span className="hl">before you offer.</span>
             </h1>
-            <p>Address, all-in cost and a Zillow link in. Rent, expenses, NOI, mortgage, cash flow and DSCR out.</p>
+            <p>Enter a St. Louis address. Get the ARV from nearby sales, a 75%-of-ARV all-in cost, and the rent, expenses, mortgage and cash flow at that number.</p>
           </section>
 
           <form className="card form" onSubmit={submit} noValidate>
             <label htmlFor="address">Property address</label>
             <AddressInput value={address} onChange={setAddress} />
-            <div className="row2">
-              <div>
-                <label htmlFor="allin">
-                  All-in cost <span className="opt">purchase + rehab + closing</span>
-                </label>
-                <div className="field">
-                  <span className="field-icon"><IconDollar /></span>
-                  <input
-                    id="allin"
-                    className="input"
-                    inputMode="numeric"
-                    placeholder="90,000"
-                    value={allIn}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 9);
-                      setAllIn(digits ? Number(digits).toLocaleString('en-US') : '');
-                    }}
-                  />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="link">
-                  Zillow link <span className="opt">for rent</span>
-                </label>
-                <div className="field">
-                  <span className="field-icon"><IconLink /></span>
-                  <input
-                    id="link"
-                    className="input"
-                    type="url"
-                    inputMode="url"
-                    placeholder="https://www.zillow.com/…"
-                    value={link}
-                    onChange={(e) => setLink(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-            <p className="form-hint">Use your underwriting spreadsheet for the all-in cost. The loan is set equal to it on a 30-year mortgage.</p>
+            <p className="form-hint">
+              St. Louis City addresses. We estimate the ARV from recent nearby sales, set your all-in cost at 75% of it, and finance it on
+              a 30-year mortgage.
+            </p>
             <button className={`btn ${loading ? 'busy' : ''}`} type="submit" disabled={loading}>
               {loading ? (
                 <>
@@ -636,7 +661,7 @@ export function App() {
 
           {!result && (
             <ul className="trust">
-              <li><IconCheck /> Full cash-flow breakdown</li>
+              <li><IconCheck /> ARV from real sales</li>
               <li><IconCheck /> Every number sourced</li>
               <li><IconCheck /> No sign-up</li>
             </ul>
@@ -645,6 +670,7 @@ export function App() {
           {result && (
             <div className="results" ref={resultsRef}>
               <Verdict a={result} />
+              <ArvCard a={result} />
               <Kpis a={result} />
               <RentBreakdown a={result} />
               <MakeItWork a={result} />

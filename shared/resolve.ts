@@ -8,6 +8,7 @@ import { listingMatchesAddress, type ListingFacts, type ListingStatus } from './
 import { analyzeValueAdd, type ValueAdd } from './valueAdd';
 import type { TaxRate } from './sources/taxes';
 import type { StlParcel } from './sources/stlCity';
+import type { ArvEstimate } from './sources/stlComps';
 
 /**
  * All-in model: the student brings an all-in cost (purchase + rehab + closing, from the
@@ -60,6 +61,7 @@ export interface Analysis {
   listing: { status: 'used' | 'mismatch' | 'failed' | 'none'; detail: string };
   lineSources: Record<string, Source>;
   valueAdd: ValueAdd | null;
+  arv: ArvEstimate | null;
   warnings: string[];
 }
 
@@ -73,12 +75,16 @@ export interface ResolveArgs {
   taxRate: TaxRate | null;
   /** Official City of St. Louis parcel record, when the address is in the City. */
   parcel?: StlParcel | null;
+  /** ARV from comparable sales; the all-in cost is 75% of it. */
+  arv?: ArvEstimate | null;
 }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 const pct = (n: number, d = 1) => `${(n * 100).toFixed(d)}%`;
 
 export const LOAN_YEARS = 30;
+/** All-in cost (purchase + rehab + closing) target: 75% of ARV. */
+export const ALL_IN_PCT_OF_ARV = 0.75;
 /** Cash-on-cash has no meaning with 100% financing, so only DSCR and $/unit cash flow are tested. */
 const ALL_IN_TARGETS: Targets = { ...TARGETS, minCashOnCash: -Infinity };
 
@@ -198,7 +204,11 @@ export function resolve(a: ResolveArgs): Analysis {
 
   // ---- Loan: all-in cost, 30 years at prime ----
   const rate = DEFAULTS.interestRate.value;
-  add('loan', 'Loan amount', money(allIn), 'user', 'Equal to your all-in cost (100% financed).');
+  if (a.arv) {
+    add('arv', 'After-repair value (ARV)', money(a.arv.arv), 'estimate', a.arv.method);
+    add('allin', 'All-in cost', money(allIn), 'default', `75% of ARV: the most to spend on purchase + rehab + closing.`);
+  }
+  add('loan', 'Loan amount', money(allIn), a.arv ? 'default' : 'user', 'Equal to the all-in cost (100% financed).');
   add('rate', 'Interest rate', pct(rate, 1), 'default', DEFAULTS.interestRate.note);
   add('term', 'Loan term', `${LOAN_YEARS} years`, 'default', '30-year mortgage.');
 
@@ -285,6 +295,7 @@ export function resolve(a: ResolveArgs): Analysis {
     listing: listingStatus,
     lineSources: { rent: rentSource, taxes: parcel?.annualTax ? 'verified' : 'estimate', insurance: 'default', utilities: 'default', maintenance: 'default', vacancy: 'default', loan: 'default' },
     valueAdd: rentKnown ? analyzeValueAdd(base, result, DEFAULTS.incomeCapRate.value) : null,
+    arv: a.arv ?? null,
     warnings,
   };
 }
