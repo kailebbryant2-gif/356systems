@@ -241,7 +241,7 @@ const SEGMENTS = [
   { key: 'vacancy', label: 'Vacancy', color: '#c9801a' },
   { key: 'expenses', label: 'Operating expenses', color: '#3d76d9' },
   { key: 'mortgage', label: 'Mortgage', color: '#a03c87' },
-  { key: 'cashflow', label: 'Cash flow', color: '#25935a' },
+  { key: 'cashflow', label: 'Cash flow', color: '#01af8d' },
 ] as const;
 
 function RentBreakdown({ a }: { a: Analysis }) {
