@@ -746,9 +746,6 @@ export function App() {
               />
             </div>
             <p className="form-hint">
-              Fill in if the records are wrong. Count only legal bedrooms: a closet and an egress window.
-            </p>
-            <p className="form-hint">
               Use your underwriting spreadsheet for the all-in cost; the loan equals it on a 30-year mortgage. For St. Louis City and
               County addresses we also estimate the ARV and check you’re at or under 75% of it.
             </p>
