@@ -71,7 +71,8 @@ export async function findCountyParcel(street: string, zip: string, signal?: Abo
   let rows = await query(`PROP_ADD = ${sqlStr(s)} AND PROP_ZIP = ${sqlStr(zip)}`, signal);
   if (!rows.length) {
     const [num, ...rest] = s.split(' ');
-    const name = rest.filter((t) => !/^(N|S|E|W|NORTH|SOUTH|EAST|WEST)$/.test(t))[0];
+    // Skip directions and "Saint"/"St"/"Mount" (spelled differently across sources) to match on the real name.
+    const name = rest.filter((t) => !/^(N|S|E|W|NORTH|SOUTH|EAST|WEST|SAINT|ST|MOUNT|MT|FORT|FT)$/.test(t))[0];
     if (num && name) rows = await query(`PROP_ADD LIKE ${sqlStr(`${num} %${name}%`)} AND PROP_ZIP = ${sqlStr(zip)}`, signal);
   }
   const best = rows.filter((r) => (r.TOTAPVAL ?? 0) > 0).sort((a, b) => (b.LIVUNIT ?? 0) - (a.LIVUNIT ?? 0))[0];
