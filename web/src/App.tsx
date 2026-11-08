@@ -349,6 +349,135 @@ function MakeItWork({ a }: { a: Analysis }) {
   );
 }
 
+function FinancingOptions({ a }: { a: Analysis }) {
+  const rows = a.financing.options;
+  return (
+    <section className="card reveal" style={reveal(7)}>
+      <div className="card-head">
+        <h3>Ways to finance it</h3>
+        <span className="muted small">Same property and rents, different loans</span>
+      </div>
+      <div className="fin-list">
+        {rows.map((o) => {
+          const known = a.rentKnown;
+          const cf = o.monthlyCashFlow;
+          return (
+            <details key={o.id} className={`fin ${o.id === 'base' ? 'fin-base' : ''}`}>
+              <summary>
+                <div className="fin-name">
+                  <strong>{o.name}</strong>
+                  <span>{o.detail}</span>
+                </div>
+                <div className="fin-nums">
+                  <div>
+                    <span>Cash in</span>
+                    <strong>{money(o.cashToClose)}</strong>
+                  </div>
+                  <div>
+                    <span>{o.id === 'fha' ? 'Net / mo' : 'Cash flow / mo'}</span>
+                    <strong className={known ? (cf >= 0 ? 'pos' : 'neg') : ''}>{known ? money(cf) : '—'}</strong>
+                  </div>
+                  <div className="fin-dscr">
+                    <span>DSCR</span>
+                    <strong>{known && o.dscr !== null && o.id !== 'fha' ? ratio(o.dscr) : '—'}</strong>
+                  </div>
+                </div>
+              </summary>
+              <p className="fin-note">
+                {o.id === 'fha' && known && cf < 0 ? `You’d live there for about ${money(-cf)}/mo after the other units’ rent. ` : ''}
+                {o.note}
+              </p>
+            </details>
+          );
+        })}
+      </div>
+      <p className="fine">Tap a row for details. Rates are screening defaults; your lender’s quote decides.</p>
+    </section>
+  );
+}
+
+function Brrrr({ a }: { a: Analysis }) {
+  const b = a.financing.brrrr;
+  if (!b || !a.rentKnown) return null;
+  const out = b.cashLeftInDeal <= 0;
+  const steps = [
+    { k: 'Buy & rehab with hard money', v: money(b.hardMoneyLoan), sub: b.fullyFunded ? 'covers price + rehab' : 'capped at 75% of ARV' },
+    { k: 'Your cash at purchase', v: money(b.cashAtPurchase), sub: 'closing, points, any gap' },
+    { k: 'Holding costs', v: money(b.holdingCosts), sub: '6 months of interest' },
+    { k: 'Refinance at 80% of ARV', v: money(b.refiLoan), sub: `${money(b.refiClosing)} refi costs` },
+  ];
+  return (
+    <section className="card reveal brrrr" style={reveal(8)}>
+      <div className="card-head">
+        <h3>Buy, rehab, rent, refinance</h3>
+        <span className="muted small">Hard money in, bank loan out</span>
+      </div>
+      <ol className="steps">
+        {steps.map((s, i) => (
+          <li key={s.k}>
+            <span className="step-n">{i + 1}</span>
+            <div className="step-k">{s.k}<small>{s.sub}</small></div>
+            <div className="step-v">{s.v}</div>
+          </li>
+        ))}
+      </ol>
+      <div className={`brrrr-result ${out ? 'good' : ''}`}>
+        <div>
+          <span>{out ? 'Cash pulled out' : 'Cash left in the deal'}</span>
+          <strong>{money(Math.abs(b.cashLeftInDeal))}</strong>
+        </div>
+        <div>
+          <span>Cash flow after refi</span>
+          <strong>{money(b.monthlyCashFlowAfter)}/mo</strong>
+        </div>
+        <div>
+          <span>DSCR after refi</span>
+          <strong>{ratio(b.dscrAfter)}</strong>
+        </div>
+      </div>
+      {b.privateMoneySavings > 0 && (
+        <p className="tip">
+          With a private lender at ~8% and 1 point instead of hard money, you’d save about {money(b.privateMoneySavings)} in points and
+          interest.
+        </p>
+      )}
+      <p className="fine">{b.note} ARV here is an estimate, so verify it with sales comps before counting on the refinance.</p>
+    </section>
+  );
+}
+
+function Partnership({ a }: { a: Analysis }) {
+  const p = a.financing.partnership;
+  if (!a.rentKnown) return null;
+  return (
+    <section className="card reveal" style={reveal(9)}>
+      <div className="card-head">
+        <h3>With a 50/50 money partner</h3>
+        <span className="muted small">They bring the cash, you do the work</span>
+      </div>
+      <div className="split">
+        <div className="split-col">
+          <span className="split-who">Partner</span>
+          <div className="split-row"><span>Puts in</span><strong>{money(p.partnerCash)}</strong></div>
+          {p.returnedAtRefi > 0 && <div className="split-row"><span>Gets back at refi</span><strong>{money(p.returnedAtRefi)}</strong></div>}
+          <div className="split-row"><span>Equity</span><strong>{money(p.partnerEquity)}</strong></div>
+          <div className="split-row"><span>Cash flow</span><strong>{money(p.monthlyCashFlowEach)}/mo</strong></div>
+          {p.partnerCashOnCash !== null && (
+            <div className="split-row"><span>Cash-on-cash</span><strong>{pct(p.partnerCashOnCash)}</strong></div>
+          )}
+        </div>
+        <div className="split-col you">
+          <span className="split-who">You</span>
+          <div className="split-row"><span>Puts in</span><strong>$0</strong></div>
+          <div className="split-row"><span>Equity</span><strong>{money(p.yourEquity)}</strong></div>
+          <div className="split-row"><span>Cash flow</span><strong>{money(p.monthlyCashFlowEach)}/mo</strong></div>
+        </div>
+      </div>
+      <p className="fine">{p.note}</p>
+    </section>
+  );
+}
+
 type Period = 'monthly' | 'annual';
 
 function Statement({ a }: { a: Analysis }) {
@@ -686,6 +815,9 @@ export function App() {
               <Kpis a={result} />
               <RentBreakdown a={result} />
               <MakeItWork a={result} />
+              <FinancingOptions a={result} />
+              <Brrrr a={result} />
+              <Partnership a={result} />
               {result.warnings.length > 0 && (
                 <section className="card notes reveal" style={reveal(7)}>
                   <h3>Heads up</h3>

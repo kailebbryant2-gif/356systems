@@ -6,6 +6,7 @@ import type { GeocodedAddress } from './sources/geocode';
 import type { FmrResult } from './sources/hud';
 import { listingMatchesAddress, type ListingFacts, type ListingStatus } from './sources/listing';
 import { estimateRehab, type RehabEstimate } from './sources/rehab';
+import { analyzeFinancing, type FinancingAnalysis } from './financing';
 import type { TaxRate } from './sources/taxes';
 
 export interface AssumptionRow {
@@ -34,6 +35,7 @@ export interface Analysis {
   listing: { status: 'used' | 'mismatch' | 'failed' | 'none'; detail: string; photos: string[] };
   /** Source of the inputs behind each operating-statement line, for row tags. */
   lineSources: Record<string, Source>;
+  financing: FinancingAnalysis;
   warnings: string[];
 }
 
@@ -350,6 +352,7 @@ export function resolve(a: ResolveArgs): Analysis {
     assumptions: rows,
     listing: listingStatus,
     lineSources,
+    financing: analyzeFinancing(base, result, commercial),
     warnings,
   };
 }

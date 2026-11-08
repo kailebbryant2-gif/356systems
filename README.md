@@ -36,6 +36,7 @@ Optional free keys improve accuracy: `HUD_API_TOKEN` (ZIP-level Small Area FMRs)
 - `shared/engine/` — deterministic underwriting (workbook formulas, with 4 corrections), defaults, solver
 - `shared/sources/` — geocoder, HUD rents, tax rates, listing reader (SSRF-safe), rehab screen
 - `shared/resolve.ts` — fills every input from the best available source and labels it
+- `shared/financing.ts` — loan options (investor, conventional, FHA house hack, seller financing, seller carryback, rate shock), BRRRR refinance, 50/50 partnership
 - `server/` — Express API (`/api/suggest`, `/api/analyze`)
 - `web/` — React quick screen
 - `tests/` — engine checked against the worked example
