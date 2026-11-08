@@ -320,6 +320,10 @@ body {
 .split-row span { color: var(--muted); }
 .split-row strong { font-variant-numeric: tabular-nums; }
 
+.low-appraisal { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; font-size: 13px; color: var(--muted); }
+.low-appraisal strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.low-appraisal .neg { color: var(--bad); }
+.low-appraisal .pos { color: var(--good); }
 .tip { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--soft); color: var(--muted); font-size: 13px; }
 
 /* ---------- Motion ---------- */

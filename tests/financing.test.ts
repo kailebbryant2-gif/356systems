@@ -43,6 +43,13 @@ describe('BRRRR', () => {
     expect(b.privateMoneySavings).toBeCloseTo(125000 * 0.02 + 100000 * 0.045 * 0.5, 6);
   });
 
+  it('a 10%-low appraisal shrinks the refinance and leaves more cash in', () => {
+    expect(b.lowAppraisal.value).toBe(180000);
+    expect(b.lowAppraisal.refiLoan).toBe(144000);
+    expect(b.lowAppraisal.cashLeftInDeal - b.cashLeftInDeal).toBeCloseTo(16000 * (1 - 0.02), 6);
+    expect(b.lowAppraisal.monthlyCashFlowAfter).toBeGreaterThan(b.monthlyCashFlowAfter);
+  });
+
   it('no rehab, no BRRRR panel', () => {
     const turnkey = { ...brrrrDeal, rehabCost: 0 };
     expect(analyzeFinancing(turnkey, analyzeDeal(turnkey), false).brrrr).toBeNull();

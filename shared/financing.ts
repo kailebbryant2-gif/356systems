@@ -39,6 +39,8 @@ export const LOANS = {
     balloonYears: 3,
     note: 'Bank lends 80%, seller carries back 20% at ~5% amortized over 30 years with a ~3-year balloon. Many banks want the buyer to bring some cash; a transactional lender can cover that.',
   },
+  /** Appraisals are opinions: stress the refinance at the low end of a typical ~10% value range. */
+  appraisalHaircut: 0.1,
   refi: {
     ltv: 0.8,
     closingPct: 0.02,
@@ -68,6 +70,8 @@ export interface Brrrr {
   monthlyCashFlowAfter: number;
   dscrAfter: number;
   fullyFunded: boolean;
+  /** Refinance if the appraisal comes in 10% under the estimated ARV. */
+  lowAppraisal: { value: number; refiLoan: number; cashLeftInDeal: number; monthlyCashFlowAfter: number };
   /** Same deal funded by a private lender (~8%, 1 point) instead of hard money. */
   privateMoneySavings: number;
   note: string;
@@ -230,6 +234,12 @@ export function analyzeFinancing(inputs: DealInputs, base: DealResult, commercia
       monthlyCashFlowAfter: (noi - debt) / 12,
       dscrAfter: debt > 0 ? noi / debt : Infinity,
       fullyFunded: hardMoneyLoan >= need,
+      lowAppraisal: (() => {
+        const value = inputs.arv * (1 - LOANS.appraisalHaircut);
+        const loan = LOANS.refi.ltv * value;
+        const left = cashAtPurchase + holdingCosts + loan * LOANS.refi.closingPct + hardMoneyLoan - loan;
+        return { value, refiLoan: loan, cashLeftInDeal: left, monthlyCashFlowAfter: (noi - monthlyPayment(loan, inputs.interestRate, inputs.amortYears) * 12) / 12 };
+      })(),
       privateMoneySavings:
         origination + holdingCosts -
         (hardMoneyLoan * LOANS.privateMoney.origination + avgBalance * LOANS.privateMoney.rate * (hm.months / 12)),

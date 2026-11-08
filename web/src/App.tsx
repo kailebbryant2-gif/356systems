@@ -435,13 +435,23 @@ function Brrrr({ a }: { a: Analysis }) {
           <strong>{ratio(b.dscrAfter)}</strong>
         </div>
       </div>
+      <div className="low-appraisal">
+        <span>
+          If it appraises 10% low ({money(b.lowAppraisal.value)}): refinance {money(b.lowAppraisal.refiLoan)}
+        </span>
+        <strong className={b.lowAppraisal.cashLeftInDeal > 0 ? 'neg' : 'pos'}>
+          {b.lowAppraisal.cashLeftInDeal > 0
+            ? `${money(b.lowAppraisal.cashLeftInDeal)} left in`
+            : `${money(-b.lowAppraisal.cashLeftInDeal)} out`}
+        </strong>
+      </div>
       {b.privateMoneySavings > 0 && (
         <p className="tip">
           With a private lender at ~8% and 1 point instead of hard money, you’d save about {money(b.privateMoneySavings)} in points and
           interest.
         </p>
       )}
-      <p className="fine">{b.note} ARV here is an estimate, so verify it with sales comps before counting on the refinance.</p>
+      <p className="fine">{b.note} ARV here is an estimate: underwrite at the low end of your comps, and give the appraiser your rents, renovation list and comps up front.</p>
     </section>
   );
 }
