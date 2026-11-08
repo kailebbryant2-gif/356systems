@@ -91,9 +91,15 @@ export const COUNTY_MIN_COMPS = 5;
 export function countyArvFrom(subject: CountyParcel, neighbors: CountyParcel[], ring: string): ArvEstimate | null {
   if (subject.units < 1) return null; // not a residential parcel
   const type = Math.min(Math.max(subject.units, 1), 5);
-  const pool = neighbors.filter(
-    (n) => n.locator !== subject.locator && n.appraised > 10000 && Math.min(Math.max(n.units, 1), 5) === type,
-  );
+  // The county layer can repeat a parcel; keep one row per parcel (and per address).
+  const seen = new Set<string>();
+  const pool = neighbors.filter((n) => {
+    const key = `${n.locator}|${n.address}`;
+    if (seen.has(n.locator) || seen.has(n.address) || n.locator === subject.locator) return false;
+    seen.add(n.locator);
+    seen.add(n.address);
+    return n.appraised > 10000 && Math.min(Math.max(n.units, 1), 5) === type && !!key;
+  });
   const perSqft = subject.area > 0 && type < 5;
   const sized = perSqft ? pool.filter((n) => n.area > 0 && Math.abs(n.area - subject.area) / subject.area <= 0.35) : pool;
   const set = sized.length >= COUNTY_MIN_COMPS ? sized : [];
