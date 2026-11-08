@@ -783,8 +783,7 @@ export function App() {
               <ValueCard a={result} />
               <Assumptions a={result} />
               <p className="disclaimer">
-                Educational screening estimate based on standard underwriting assumptions and market data (RentCast, HUD Fair Market Rents, St. Louis City and County records, US
-                Census). Not an appraisal, loan approval or tax advice. Verify rents, taxes and insurance before you offer.
+                Educational screening estimate based on standard underwriting assumptions. Not an appraisal, loan approval or tax advice. Verify rents, taxes and insurance before you offer.
               </p>
             </div>
           )}
