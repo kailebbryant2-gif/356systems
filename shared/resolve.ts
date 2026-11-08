@@ -7,6 +7,7 @@ import type { FmrResult } from './sources/hud';
 import { listingMatchesAddress, type ListingFacts, type ListingStatus } from './sources/listing';
 import { estimateRehab, type RehabEstimate } from './sources/rehab';
 import { analyzeFinancing, type FinancingAnalysis } from './financing';
+import { analyzeValueAdd, type ValueAdd } from './valueAdd';
 import type { TaxRate } from './sources/taxes';
 
 export interface AssumptionRow {
@@ -36,6 +37,7 @@ export interface Analysis {
   /** Source of the inputs behind each operating-statement line, for row tags. */
   lineSources: Record<string, Source>;
   financing: FinancingAnalysis;
+  valueAdd: ValueAdd | null;
   warnings: string[];
 }
 
@@ -353,6 +355,7 @@ export function resolve(a: ResolveArgs): Analysis {
     listing: listingStatus,
     lineSources,
     financing: analyzeFinancing(base, result, commercial),
+    valueAdd: rentKnown ? analyzeValueAdd(base, result, DEFAULTS.incomeCapRate.value) : null,
     warnings,
   };
 }

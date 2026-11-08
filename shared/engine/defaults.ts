@@ -35,7 +35,7 @@ export const DEFAULTS = {
     gut: 75,
   },
   /** Income-approach cap rate used for ARV when no sales comps are available. */
-  incomeCapRate: { value: 0.07, note: 'Exit cap stressed to 7% in case rates rise.' },
+  incomeCapRate: { value: 0.07, note: 'Cap rate stressed to 7%: underwrite 0.5–1 point above what brokers quote, since cap rates rise with interest rates.' },
 } as const;
 
 /**

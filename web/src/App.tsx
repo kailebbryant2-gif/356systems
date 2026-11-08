@@ -349,6 +349,52 @@ function MakeItWork({ a }: { a: Analysis }) {
   );
 }
 
+function ValueCard({ a }: { a: Analysis }) {
+  const v = a.valueAdd;
+  if (!v) return null;
+  const drop = v.value - v.valueIfCapUp;
+  return (
+    <section className="card reveal" style={reveal(7)}>
+      <div className="card-head">
+        <h3>What raises the value</h3>
+        <span className="muted small">Value = NOI ÷ {pct(v.capRate, 0)} cap rate</span>
+      </div>
+      <div className="value-hero">
+        <div>
+          <span>Income value</span>
+          <strong>{money(v.value)}</strong>
+        </div>
+        <div>
+          <span>Every +$1,000/yr of NOI</span>
+          <strong className="pos">+{money(v.perThousandNoi)}</strong>
+        </div>
+        <div>
+          <span>If cap rates rise 1 point</span>
+          <strong className="neg">−{money(drop)}</strong>
+        </div>
+      </div>
+      <ul className="levers">
+        {v.levers.map((l) => (
+          <li key={l.id}>
+            <div>
+              <div className="lever-label">{l.label}</div>
+              <div className="lever-note">{l.note} +{money(l.addedNoi)}/yr NOI.</div>
+            </div>
+            <strong className="pos">+{money(l.addedValue)}</strong>
+          </li>
+        ))}
+      </ul>
+      <p className="fine">
+        {v.incomeValued
+          ? 'Buildings with 5+ units are valued on income, so every operating improvement shows up in value. '
+          : 'Lenders value 1–4 units on sales comps, so treat these as income-based indications. '}
+        Cap rate stressed to {pct(v.capRate, 0)}; ask several brokers (not the listing broker) what similar stabilized buildings trade at,
+        then underwrite 0.5–1 point higher.
+      </p>
+    </section>
+  );
+}
+
 function FinancingOptions({ a }: { a: Analysis }) {
   const rows = a.financing.options;
   return (
@@ -825,6 +871,7 @@ export function App() {
               <Kpis a={result} />
               <RentBreakdown a={result} />
               <MakeItWork a={result} />
+              <ValueCard a={result} />
               <FinancingOptions a={result} />
               <Brrrr a={result} />
               <Partnership a={result} />

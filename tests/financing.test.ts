@@ -104,3 +104,35 @@ describe('loan options', () => {
     expect(ids).toEqual(['base', 'seller', 'carryback', 'shock']);
   });
 });
+
+import { analyzeValueAdd } from '../shared/valueAdd';
+
+describe('value-add levers (value = NOI ÷ cap rate)', () => {
+  const fourplex: DealInputs = {
+    ...brrrrDeal, rehabCost: 0, purchasePrice: 400000, closingCosts: 8000,
+    units: [unit(1100), unit(1100), unit(1100), unit(1100)],
+    stabilized: { lawnSnow: 40, waterSewerTrash: 300, electricGas: 0 }, current: { lawnSnow: 40, waterSewerTrash: 300, electricGas: 0 },
+  };
+  const r = analyzeDeal(fourplex);
+  const v = analyzeValueAdd(fourplex, r, 0.07)!;
+
+  it('values on income and stresses a 1-point cap rise', () => {
+    expect(v.value).toBeCloseTo(r.stabilized.noi / 0.07, 6);
+    expect(v.valueIfCapUp).toBeCloseTo(r.stabilized.noi / 0.08, 6);
+    expect(v.perThousandNoi).toBeCloseTo(1000 / 0.07, 6);
+  });
+
+  it('a $25 renewal bump is worth units × $300/yr × 80% kept ÷ cap', () => {
+    const l = v.levers.find((x) => x.id === 'rent25')!;
+    expect(l.addedNoi).toBeCloseTo(4 * 300 * 0.8, 6);
+    expect(l.addedValue).toBeCloseTo((4 * 300 * 0.8) / 0.07, 6);
+  });
+
+  it('utility billback recovers owner-paid water, sewer and trash', () => {
+    expect(v.levers.find((x) => x.id === 'billback')!.addedNoi).toBe(3600);
+  });
+
+  it('single-family gets no value-add card', () => {
+    expect(analyzeValueAdd(brrrrDeal, analyzeDeal(brrrrDeal), 0.07)).toBeNull();
+  });
+});
