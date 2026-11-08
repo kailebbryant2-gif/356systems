@@ -124,7 +124,7 @@ export function resolve(a: ResolveArgs): Analysis {
   const parcel = a.parcel ?? null;
   let unitCount = parcel?.units ?? facts?.units ?? null;
   let unitsSource: Source = parcel?.units ? 'verified' : 'listing';
-  let unitsNote = parcel?.units ? `City of St. Louis property record (parcel ${parcel.parcelId}).` : 'Stated in the listing.';
+  let unitsNote = parcel?.units ? `Official property record (parcel ${parcel.parcelId}).` : 'Stated in the listing.';
   if (parcel?.units && facts?.units && facts.units !== parcel.units) {
     warnings.push(`The listing says ${facts.units} units but the city record says ${parcel.units}. Using the city record.`);
   }

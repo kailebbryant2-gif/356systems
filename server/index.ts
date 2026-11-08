@@ -9,6 +9,7 @@ import { estimateArv, findSubject, suggestStlAddresses } from '../shared/sources
 import { effectiveTaxRate } from '../shared/sources/taxes';
 import { resolve } from '../shared/resolve';
 import { localRent } from '../shared/rents';
+import { countyArv, findCountyParcel, suggestCountyAddresses } from '../shared/sources/stlCounty';
 
 const app = express();
 app.disable('x-powered-by');
@@ -22,6 +23,9 @@ app.get('/api/suggest', async (req, res) => {
   // St. Louis City parcel addresses first: instant and independent of outside services.
   const local = suggestStlAddresses(q).map((label) => ({ label }));
   if (local.length >= 1) return res.json({ suggestions: local });
+  // St. Louis County parcel addresses next (public county parcel service).
+  const county = await suggestCountyAddresses(q, withTimeout(4000)).catch(() => []);
+  if (county.length >= 1) return res.json({ suggestions: county.map((label) => ({ label })) });
   const remote = await suggest(q, withTimeout(6000)).catch(() => []);
   const seen = new Set(local.map((s) => s.label.toUpperCase()));
   res.json({ suggestions: [...local, ...remote.filter((s) => !seen.has(s.label.toUpperCase()))].slice(0, 5) });
@@ -55,15 +59,24 @@ app.post('/api/analyze', async (req, res) => {
     // ARV from City sales records (St. Louis City only).
     let arvNote: string | null = null;
     let arv = null;
+    let countyUnits: typeof parcel = null;
     const subject = inStlCity ? findSubject({ parcelId: parcel?.parcelId, street }) : null;
     if (inStlCity) {
       arv = subject ? estimateArv(subject) : null;
       if (!arv) arvNote = subject ? 'Not enough recent sales of similar properties nearby to estimate ARV.' : 'Property not found in the city parcel records, so no ARV.';
+    } else if (geo.stateFips === '29' && geo.countyFips === '189') {
+      // St. Louis County: appraised values of similar nearby homes (no public sale prices in Missouri).
+      const cp = await findCountyParcel(street, geo.zip, withTimeout(12000)).catch(() => null);
+      arv = cp ? await countyArv(cp, withTimeout(15000)).catch(() => null) : null;
+      if (cp && cp.units >= 1) {
+        countyUnits = { parcelId: cp.locator, units: cp.units, annualTax: null, taxYear: null, assessedTotal: null, appraisedTotal: cp.appraised, abated: false, zoning: null, yearBuilt: cp.yearBuilt };
+      }
+      if (!arv) arvNote = cp ? (cp.units < 1 ? 'This isn’t a residential parcel in the county records, so no ARV.' : 'Not enough similar properties nearby to estimate ARV.') : 'Property not found in the St. Louis County parcel records, so no ARV.';
     } else {
-      arvNote = `ARV comes from City of St. Louis sales records, so it isn’t available for ${geo.countyName || 'this area'}.`;
+      arvNote = `ARV is available for St. Louis City and St. Louis County addresses only.`;
     }
     const rent = localRent({ inStlCity, cityNbhd: subject?.nbhd, zip: geo.zip });
-    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel, arv, arvNote, localRent: rent }));
+    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel: parcel ?? countyUnits, arv, arvNote, localRent: rent }));
   } catch (e) {
     console.error(`[${ref}]`, e);
     res.status(502).json({ error: 'A data source didn’t respond. Please try again in a minute.', ref });

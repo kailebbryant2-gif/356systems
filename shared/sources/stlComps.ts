@@ -15,7 +15,7 @@ export interface Comp {
   price: number;
   units: number;
   area: number; // building sq ft, 0 if unknown
-  kind: 'arms' | 'rehab' | 'asis';
+  kind: 'arms' | 'rehab' | 'asis' | 'appraised';
 }
 
 export interface Subject {
@@ -39,6 +39,8 @@ export interface ArvEstimate {
   comps: Comp[]; // the sales the estimate is built from (most recent first)
   compCount: number;
   latestSale: string;
+  /** City sales records, or County appraised values. */
+  source: 'city-sales' | 'county-appraisal';
   subject: Subject;
 }
 
@@ -178,6 +180,7 @@ export function estimateArv(subject: Subject): ArvEstimate | null {
       comps: comps.slice(0, 8),
       compCount: basisSet.length,
       latestSale: d.latestSale,
+      source: 'city-sales',
       subject,
     };
   }

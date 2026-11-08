@@ -191,7 +191,7 @@ function Verdict({ a }: { a: Analysis }) {
   );
 }
 
-const KIND_LABEL = { rehab: 'Renovated', arms: 'Open market', asis: 'As-is' } as const;
+const KIND_LABEL = { rehab: 'Renovated', arms: 'Open market', asis: 'As-is', appraised: 'Appraised' } as const;
 
 function ArvCard({ a }: { a: Analysis }) {
   const v = a.arv;
@@ -207,8 +207,12 @@ function ArvCard({ a }: { a: Analysis }) {
   return (
     <section className="card reveal" style={reveal(1)}>
       <div className="card-head">
-        <h3>After-repair value from nearby sales</h3>
-        <span className="muted small">City of St. Louis sales records through {date(v.latestSale)}</span>
+        <h3>{v.source === 'county-appraisal' ? 'After-repair value from nearby appraisals' : 'After-repair value from nearby sales'}</h3>
+        <span className="muted small">
+          {v.source === 'county-appraisal'
+            ? `St. Louis County appraised values, tax year ${v.latestSale.slice(0, 4)}`
+            : `City of St. Louis sales records through ${date(v.latestSale)}`}
+        </span>
       </div>
       <div className="value-hero">
         <div>
@@ -238,9 +242,9 @@ function ArvCard({ a }: { a: Analysis }) {
         <table className="tbl comps">
           <thead>
             <tr>
-              <th>Comparable sale</th>
-              <th>Sold</th>
-              <th>Price</th>
+              <th>{v.source === 'county-appraisal' ? 'Similar property' : 'Comparable sale'}</th>
+              <th>{v.source === 'county-appraisal' ? 'Tax year' : 'Sold'}</th>
+              <th>{v.source === 'county-appraisal' ? 'Appraised' : 'Price'}</th>
               <th>Sq ft</th>
             </tr>
           </thead>
@@ -251,7 +255,7 @@ function ArvCard({ a }: { a: Analysis }) {
                   {c.address}
                   {c.units > 1 ? ` · ${c.units} units` : ''} <span className={`kind kind-${c.kind}`}>{KIND_LABEL[c.kind]}</span>
                 </td>
-                <td>{date(c.date)}</td>
+                <td>{v.source === 'county-appraisal' ? c.date.slice(0, 4) : date(c.date)}</td>
                 <td>{money(c.price)}</td>
                 <td>{c.area ? c.area.toLocaleString('en-US') : '—'}</td>
               </tr>
@@ -260,8 +264,9 @@ function ArvCard({ a }: { a: Analysis }) {
         </table>
       </div>
       <p className="fine">
-        Sales records don’t show condition or finishes, so check these comps against your rehab scope. Underwrite at the low end if
-        your finishes won’t match the renovated sales. {v.compCount > v.comps.length ? `Showing the ${v.comps.length} most recent of ${v.compCount}.` : ''}
+        {v.source === 'county-appraisal'
+          ? 'Appraised values aren’t sale prices: they usually run below market and ignore renovations. Pull real sold comps (e.g. Redfin) before you offer.'
+          : 'Sales records don’t show condition or finishes, so check these comps against your rehab scope. Underwrite at the low end if your finishes won’t match the renovated sales.'} {v.compCount > v.comps.length ? `Showing the ${v.comps.length} ${v.source === 'county-appraisal' ? 'closest in size' : 'most recent'} of ${v.compCount}.` : ''}
       </p>
     </section>
   );
@@ -677,8 +682,8 @@ export function App() {
               />
             </div>
             <p className="form-hint">
-              Use your underwriting spreadsheet for the all-in cost; the loan equals it on a 30-year mortgage. For St. Louis City
-              addresses we also estimate the ARV from nearby sales and check you’re at or under 75% of it.
+              Use your underwriting spreadsheet for the all-in cost; the loan equals it on a 30-year mortgage. For St. Louis City and
+              County addresses we also estimate the ARV and check you’re at or under 75% of it.
             </p>
             <button className={`btn ${loading ? 'busy' : ''}`} type="submit" disabled={loading}>
               {loading ? (
