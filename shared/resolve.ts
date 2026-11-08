@@ -193,11 +193,11 @@ export function resolve(a: ResolveArgs): Analysis {
     String(bedsPerUnit),
     ov.beds ? 'user' : bedsFromListing ? 'listing' : 'estimate',
     bedsFromMarket
-      ? `Property record (via RentCast): ${mr!.beds} bed${mr!.baths ? ` / ${mr!.baths} bath` : ''}${mr!.sqft ? `, ${mr!.sqft.toLocaleString('en-US')} sq ft` : ''}. Records can be wrong; count only legal bedrooms (closet and egress window).`
+      ? `Property record (via RentCast): ${mr!.beds} bed${mr!.baths ? ` / ${mr!.baths} bath` : ''}${mr!.sqft ? `, ${mr!.sqft.toLocaleString('en-US')} sq ft` : ''}.`
       : ov.beds
       ? unitCount > 1
         ? `You entered ${ov.beds} bedrooms ÷ ${unitCount} units.`
-        : 'Entered by you. Count only rooms with a closet and a legal egress window; basement and attic rooms often don’t qualify.'
+        : 'Entered by you.'
       : bedsFromListing
       ? `Listing total (${facts!.totalBeds}) ÷ units.`
       : areaPerUnit
