@@ -23,6 +23,7 @@ const Icon = ({ d, size = 18 }: { d: ReactNode; size?: number }) => (
   </svg>
 );
 const IconPin = () => <Icon d={<><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></>} />;
+const IconDollar = () => <Icon d={<><path d="M12 3v18" /><path d="M16.5 7.5c-.8-1.3-2.4-2-4.5-2-2.6 0-4 1.3-4 3s1.6 2.5 4 3 4 1.4 4 3.2-1.5 3.3-4.2 3.3c-2 0-3.7-.8-4.6-2.2" /></>} />;
 const IconArrow = () => <Icon d={<><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></>} />;
 const IconCheck = () => <Icon size={16} d={<path d="M5 12.5l4.5 4.5L19 7.5" />} />;
 const IconTag = () => <Icon d={<><path d="M3 12V4h8l10 10-8 8z" /><circle cx="7.5" cy="8.5" r="1.3" /></>} />;
@@ -164,7 +165,8 @@ function Verdict({ a }: { a: Analysis }) {
           <h2>{a.verdict.headline}</h2>
           <p className="muted">
             {a.address.matched}
-            {a.arv ? ` · ARV ${money(a.arv.arv)} · all-in ${money(a.allInCost)} (75%)` : ` · ${money(a.allInCost)} all-in`}
+            {` · ${money(a.allInCost)} all-in`}
+            {a.arv ? ` · ARV ${money(a.arv.arv)}` : ''}
           </p>
         </div>
       </div>
@@ -189,7 +191,14 @@ const KIND_LABEL = { rehab: 'Renovated', arms: 'Open market', asis: 'As-is' } as
 
 function ArvCard({ a }: { a: Analysis }) {
   const v = a.arv;
-  if (!v) return null;
+  if (!v) {
+    return a.arvNote ? (
+      <section className="card notes reveal" style={reveal(1)}>
+        <h3>No ARV for this address</h3>
+        <p className="muted">{a.arvNote} Results below use your all-in cost only.</p>
+      </section>
+    ) : null;
+  }
   const date = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   return (
     <section className="card reveal" style={reveal(1)}>
@@ -209,10 +218,17 @@ function ArvCard({ a }: { a: Analysis }) {
           </strong>
         </div>
         <div>
-          <span>All-in cost (75% of ARV)</span>
-          <strong className="pos">{money(a.allInCost)}</strong>
+          <span>Max all-in (75% of ARV)</span>
+          <strong className={a.allInCost <= (a.maxAllInFromArv ?? 0) ? 'pos' : 'neg'}>{money(a.maxAllInFromArv)}</strong>
         </div>
       </div>
+      <p className={`arv-verdict ${a.allInCost <= (a.maxAllInFromArv ?? 0) ? 'ok' : 'over'}`}>
+        Your all-in cost of {money(a.allInCost)} is{' '}
+        {a.allInCost <= (a.maxAllInFromArv ?? 0)
+          ? `${money((a.maxAllInFromArv ?? 0) - a.allInCost)} under the 75% mark.`
+          : `${money(a.allInCost - (a.maxAllInFromArv ?? 0))} over the 75% mark.`}{' '}
+        ({pct(a.allInCost / v.arv, 1)} of ARV)
+      </p>
       <p className="arv-method">{v.method}</p>
       <div className="table-wrap">
         <table className="tbl comps">
@@ -273,7 +289,7 @@ function Kpis({ a }: { a: Analysis }) {
       sub: 'lenders want 1.20+',
       meter: known && <Meter value={s.dscr} target={1.2} max={1.8} />,
     },
-    { label: 'Loan', value: money(a.loan.amount), sub: `= all-in (75% of ARV) · ${a.loan.years} yrs`, meter: null },
+    { label: 'Loan', value: money(a.loan.amount), sub: `= your all-in cost · ${a.loan.years} yrs`, meter: null },
     { label: 'Mortgage', value: `${money(a.loan.monthlyPayment)}`, sub: `per month at ${pct(a.loan.rate, 1)}`, meter: null },
   ];
   return (
@@ -575,6 +591,7 @@ const STEPS = ['Finding the property', 'Pulling nearby sales', 'Estimating ARV',
 
 export function App() {
   const [address, setAddress] = useState('');
+  const [allIn, setAllIn] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -591,14 +608,16 @@ export function App() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const v = Number(allIn.replace(/,/g, ''));
     if (address.trim().length < 5) return setError('Enter the property address.');
+    if (!v) return setError('Enter your all-in cost.');
     setLoading(true);
     setResult(null);
     try {
       const r = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ address }),
+        body: JSON.stringify({ address, allInCost: v }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.ref ? `${d.error} (ref ${d.ref})` : d.error);
@@ -630,15 +649,32 @@ export function App() {
             <h1>
               Know if a deal works <span className="hl">before you offer.</span>
             </h1>
-            <p>Enter a St. Louis address. Get the ARV from nearby sales, a 75%-of-ARV all-in cost, and the rent, expenses, mortgage and cash flow at that number.</p>
+            <p>Enter the address and your all-in cost. Get the ARV from nearby sales, the 75% check, and the rent, expenses, mortgage and cash flow.</p>
           </section>
 
           <form className="card form" onSubmit={submit} noValidate>
             <label htmlFor="address">Property address</label>
             <AddressInput value={address} onChange={setAddress} />
+            <label htmlFor="allin">
+              All-in cost <span className="opt">purchase + rehab + closing</span>
+            </label>
+            <div className="field">
+              <span className="field-icon"><IconDollar /></span>
+              <input
+                id="allin"
+                className="input"
+                inputMode="numeric"
+                placeholder="90,000"
+                value={allIn}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 9);
+                  setAllIn(digits ? Number(digits).toLocaleString('en-US') : '');
+                }}
+              />
+            </div>
             <p className="form-hint">
-              St. Louis City addresses. We estimate the ARV from recent nearby sales, set your all-in cost at 75% of it, and finance it on
-              a 30-year mortgage.
+              Use your underwriting spreadsheet for the all-in cost; the loan equals it on a 30-year mortgage. For St. Louis City
+              addresses we also estimate the ARV from nearby sales and check you’re at or under 75% of it.
             </p>
             <button className={`btn ${loading ? 'busy' : ''}`} type="submit" disabled={loading}>
               {loading ? (

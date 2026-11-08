@@ -62,6 +62,9 @@ export interface Analysis {
   lineSources: Record<string, Source>;
   valueAdd: ValueAdd | null;
   arv: ArvEstimate | null;
+  /** Most to spend all-in: 75% of ARV. */
+  maxAllInFromArv: number | null;
+  arvNote: string | null;
   warnings: string[];
 }
 
@@ -77,6 +80,8 @@ export interface ResolveArgs {
   parcel?: StlParcel | null;
   /** ARV from comparable sales; the all-in cost is 75% of it. */
   arv?: ArvEstimate | null;
+  /** Why there is no ARV, when there isn't one. */
+  arvNote?: string | null;
 }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
@@ -204,11 +209,13 @@ export function resolve(a: ResolveArgs): Analysis {
 
   // ---- Loan: all-in cost, 30 years at prime ----
   const rate = DEFAULTS.interestRate.value;
+  const maxAllInFromArv = a.arv ? Math.round(a.arv.arv * ALL_IN_PCT_OF_ARV) : null;
+  add('allin', 'All-in cost', money(allIn), 'user', 'Your purchase + rehab + closing, from the underwriting spreadsheet.');
   if (a.arv) {
     add('arv', 'After-repair value (ARV)', money(a.arv.arv), 'estimate', a.arv.method);
-    add('allin', 'All-in cost', money(allIn), 'default', `75% of ARV: the most to spend on purchase + rehab + closing.`);
+    add('maxallin', 'Max all-in (75% of ARV)', money(maxAllInFromArv!), 'estimate', 'All-in cost should be at or under 75% of ARV.');
   }
-  add('loan', 'Loan amount', money(allIn), a.arv ? 'default' : 'user', 'Equal to the all-in cost (100% financed).');
+  add('loan', 'Loan amount', money(allIn), 'user', 'Equal to your all-in cost (100% financed).');
   add('rate', 'Interest rate', pct(rate, 1), 'default', DEFAULTS.interestRate.note);
   add('term', 'Loan term', `${LOAN_YEARS} years`, 'default', '30-year mortgage.');
 
@@ -221,7 +228,7 @@ export function resolve(a: ResolveArgs): Analysis {
     amortYears: LOAN_YEARS,
     rehabCost: 0,
     rehabOutOfPocketPct: 1,
-    arv: allIn,
+    arv: a.arv?.arv ?? allIn,
     units,
     vacancyPct: DEFAULTS.vacancyPct.value,
     taxesCurrent: taxes,
@@ -246,7 +253,9 @@ export function resolve(a: ResolveArgs): Analysis {
     taxBump: parcel?.annualTax ? 0 : -1, // a real tax bill stays fixed; an estimate scales with the all-in cost
   };
   const sol = solve(base, links, ALL_IN_TARGETS);
-  const c = checks(result, ALL_IN_TARGETS).filter((x) => x.id === 'dscr' || x.id === 'cashflow');
+  const c = checks(result, ALL_IN_TARGETS)
+    .filter((x) => x.id === 'dscr' || x.id === 'cashflow' || (x.id === 'rule75' && !!a.arv))
+    .map((x) => (x.id === 'rule75' ? { ...x, label: 'All-in ÷ ARV (75% rule)' } : x));
 
   // ---- Loan options at this amount ----
   const opt = (id: LoanOption['id'], name: string, years: number, r: number): LoanOption => {
@@ -296,6 +305,8 @@ export function resolve(a: ResolveArgs): Analysis {
     lineSources: { rent: rentSource, taxes: parcel?.annualTax ? 'verified' : 'estimate', insurance: 'default', utilities: 'default', maintenance: 'default', vacancy: 'default', loan: 'default' },
     valueAdd: rentKnown ? analyzeValueAdd(base, result, DEFAULTS.incomeCapRate.value) : null,
     arv: a.arv ?? null,
+    maxAllInFromArv,
+    arvNote: a.arv ? null : (a.arvNote ?? null),
     warnings,
   };
 }

@@ -48,4 +48,23 @@ describe('ARV from City of St. Louis sales (bundled data)', () => {
     expect(a.arv?.arv).toBe(arv.arv);
     expect(a.assumptions.find((r) => r.key === 'arv')!.source).toBe('estimate');
   });
+
+  it('checks the entered all-in cost against 75% of ARV', () => {
+    const arv = estimateArv(findSubject({ street: '3520 WYOMING ST' })!)!;
+    const geo = {
+      matchedAddress: '3520 WYOMING ST, SAINT LOUIS, MO, 63118', houseNumber: '3520', streetName: 'WYOMING', city: 'SAINT LOUIS',
+      state: 'MO', zip: '63118', stateFips: '29', countyFips: '510', countyName: 'St. Louis city', lat: 38.59, lon: -90.24,
+    };
+    const run = (allInCost: number) => resolve({ inputAddress: 'x', geo, allInCost, listing: null, fmr: null, fmrError: null, taxRate: null, arv });
+    const under = run(Math.floor(arv.arv * 0.7));
+    const over = run(Math.ceil(arv.arv * 0.8));
+    expect(under.loan.amount).toBe(Math.floor(arv.arv * 0.7));
+    expect(under.maxAllInFromArv).toBe(Math.round(arv.arv * 0.75));
+    expect(under.checks.find((c) => c.id === 'rule75')!.pass).toBe(true);
+    expect(over.checks.find((c) => c.id === 'rule75')!.pass).toBe(false);
+    // No ARV, no 75% check
+    const none = resolve({ inputAddress: 'x', geo, allInCost: 90000, listing: null, fmr: null, fmrError: null, taxRate: null, arvNote: 'n/a' });
+    expect(none.checks.map((c) => c.id)).toEqual(['dscr', 'cashflow']);
+    expect(none.arvNote).toBe('n/a');
+  });
 });

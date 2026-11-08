@@ -7,7 +7,7 @@ import { getFmr } from '../shared/sources/hud';
 import { fetchStlParcel } from '../shared/sources/stlCity';
 import { estimateArv, findSubject } from '../shared/sources/stlComps';
 import { effectiveTaxRate } from '../shared/sources/taxes';
-import { ALL_IN_PCT_OF_ARV, resolve } from '../shared/resolve';
+import { resolve } from '../shared/resolve';
 
 const app = express();
 app.disable('x-powered-by');
@@ -28,17 +28,16 @@ app.get('/api/suggest', async (req, res) => {
 app.post('/api/analyze', async (req, res) => {
   const ref = randomUUID().slice(0, 8);
   const address = String(req.body?.address ?? '').trim();
+  const allInCost = Number(req.body?.allInCost);
   if (address.length < 5 || address.length > 200) return res.status(400).json({ error: 'Enter a full property address.', ref });
+  if (!Number.isFinite(allInCost) || allInCost < 1000 || allInCost > 100_000_000) {
+    return res.status(400).json({ error: 'Enter your all-in cost (purchase + rehab + closing) between $1,000 and $100,000,000.', ref });
+  }
 
   try {
     const geo = await geocode(address, withTimeout(10000));
     if (!geo) return res.status(422).json({ error: 'We couldn’t find that address. Check the street number and city.', ref });
-    if (!(geo.stateFips === '29' && geo.countyFips === '510')) {
-      return res.status(422).json({
-        error: `Dealwise estimates ARV from City of St. Louis sales records, so it covers St. Louis City addresses only. This one is in ${geo.countyName || 'another area'}, ${geo.state}.`,
-        ref,
-      });
-    }
+    const inStlCity = geo.stateFips === '29' && geo.countyFips === '510';
 
     let fmrError: string | null = null;
     const street = geo.matchedAddress.split(',')[0];
@@ -48,17 +47,20 @@ app.post('/api/analyze', async (req, res) => {
         return null;
       }),
       effectiveTaxRate(geo.state, geo.stateFips, geo.countyFips, geo.countyName, withTimeout(8000)).catch(() => null),
-      fetchStlParcel(street, withTimeout(20000)).catch(() => null),
+      inStlCity ? fetchStlParcel(street, withTimeout(20000)).catch(() => null) : Promise.resolve(null),
     ]);
 
-    const subject = findSubject({ parcelId: parcel?.parcelId, street });
-    if (!subject) return res.status(422).json({ error: 'We couldn’t find this property in the City of St. Louis parcel records.', ref });
-    const arv = estimateArv(subject);
-    if (!arv) {
-      return res.status(422).json({ error: 'Not enough recent sales of similar properties nearby to estimate an ARV for this address.', ref });
+    // ARV from City sales records (St. Louis City only).
+    let arvNote: string | null = null;
+    let arv = null;
+    if (inStlCity) {
+      const subject = findSubject({ parcelId: parcel?.parcelId, street });
+      arv = subject ? estimateArv(subject) : null;
+      if (!arv) arvNote = subject ? 'Not enough recent sales of similar properties nearby to estimate ARV.' : 'Property not found in the city parcel records, so no ARV.';
+    } else {
+      arvNote = `ARV comes from City of St. Louis sales records, so it isn’t available for ${geo.countyName || 'this area'}.`;
     }
-    const allInCost = Math.round((arv.arv * ALL_IN_PCT_OF_ARV) / 1000) * 1000;
-    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel, arv }));
+    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel, arv, arvNote }));
   } catch (e) {
     console.error(`[${ref}]`, e);
     res.status(502).json({ error: 'A data source didn’t respond. Please try again in a minute.', ref });
