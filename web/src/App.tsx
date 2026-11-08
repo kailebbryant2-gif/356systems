@@ -732,7 +732,7 @@ export function App() {
               />
             </div>
             <label htmlFor="beds">
-              Bedrooms <span className="opt">optional, total for the property</span>
+              Bedrooms
             </label>
             <div className="field">
               <span className="field-icon"><IconBed /></span>
@@ -740,15 +740,11 @@ export function App() {
                 id="beds"
                 className="input"
                 inputMode="numeric"
-                placeholder="From public records"
+                placeholder="Optional"
                 value={beds}
                 onChange={(e) => setBeds(e.target.value.replace(/[^\d]/g, '').slice(0, 2))}
               />
             </div>
-            <p className="form-hint">
-              Use your underwriting spreadsheet for the all-in cost; the loan equals it on a 30-year mortgage. For St. Louis City and
-              County addresses we also estimate the ARV and check you’re at or under 75% of it.
-            </p>
             <button className={`btn ${loading ? 'busy' : ''}`} type="submit" disabled={loading}>
               {loading ? (
                 <>
