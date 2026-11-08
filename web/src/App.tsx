@@ -701,7 +701,7 @@ export function App() {
         <main>
           <section className="hero">
             <div className="eyebrow">
-              <span className="pulse" /> Free rental deal analyzer
+              <span className="pulse" /> Deal analyzer
             </div>
             <h1>
               Know if a deal works <span className="hl">before you offer.</span>
