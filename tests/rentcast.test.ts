@@ -54,3 +54,44 @@ describe('RentCast rent estimates', () => {
     expect(a.marketRent).toBeNull();
   });
 });
+
+describe('RentCast: at most one call per address', () => {
+  it('asks for the entered bedroom count in the one call, and never calls again for that address', async () => {
+    const { vi } = await import('vitest');
+    const { rentEstimate } = await import('../shared/sources/rentcast');
+    process.env.RENTCAST_API_KEY = 'test-key';
+    const urls: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (u: any) => {
+      urls.push(String(u));
+      return new Response(JSON.stringify({ ...house, subjectProperty: { ...house.subjectProperty, bedrooms: 3 } }), { status: 200 });
+    });
+    try {
+      const addr = '1215 GRUNER PL, SAINT LOUIS, MO, 63133';
+      const first = await rentEstimate(addr, { units: 1, bedsPerUnit: 3, bedsEntered: true });
+      expect(urls).toHaveLength(1);
+      expect(urls[0]).toMatch(/bedrooms=3/);
+      expect(first!.beds).toBe(3);
+      await rentEstimate(addr, { units: 1, bedsPerUnit: 4, bedsEntered: true }); // different count: reuse, no new call
+      await rentEstimate(addr, { units: 1, bedsPerUnit: 2 });
+      expect(urls).toHaveLength(1);
+      // blank bedrooms: the call doesn't force a count (RentCast uses its record)
+      await rentEstimate('2 OTHER ST, SAINT LOUIS, MO, 63133', { units: 1, bedsPerUnit: 2 });
+      expect(urls[1]).not.toMatch(/bedrooms=/);
+    } finally {
+      fetchMock.mockRestore();
+      delete process.env.RENTCAST_API_KEY;
+    }
+  });
+
+  it('an estimate for a different bedroom count falls back to the rule of thumb for the entered count', () => {
+    const a = resolve({
+      inputAddress: 'x', geo: geo('63133', '189'), allInCost: 100000, listing: null, fmr: null, fmrError: null, taxRate: null,
+      parcel: parcel(1), buildingArea: 906, localRent: localRent({ inStlCity: false, zip: '63133' }), marketRent: parseRentcast(house), // a 2-bed estimate
+      overrides: { beds: 3 },
+    });
+    expect(a.assumptions.find((r) => r.key === 'beds')!.value).toBe('3');
+    const rent = a.assumptions.find((r) => r.key === 'rent')!;
+    expect(rent.value).toBe('$1,450/mo');
+    expect(rent.note).toMatch(/estimate on file for this address is for a 2-bed/);
+  });
+});

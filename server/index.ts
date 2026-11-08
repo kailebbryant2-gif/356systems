@@ -103,7 +103,7 @@ app.post('/api/analyze', async (req, res) => {
     const bedsPerUnit = overrides.beds ? overrides.beds / recordUnits : area ? bedsFromArea(area / recordUnits) : 2;
     const marketRent = await rentEstimate(
       geo.matchedAddress,
-      { units: recordUnits, bedsPerUnit, sqftPerUnit: area ? area / recordUnits : null },
+      { units: recordUnits, bedsPerUnit, sqftPerUnit: area ? area / recordUnits : null, bedsEntered: !!overrides.beds },
       withTimeout(10000),
     ).catch(() => null);
     res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel: parcel ?? countyUnits, arv, arvNote, localRent: rent, buildingArea, overrides, marketRent }));

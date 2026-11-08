@@ -3,7 +3,8 @@
  * unit for 2+ unit buildings (priced against nearby apartments with the same bedroom count).
  * https://developers.rentcast.io  ·  key in the RENTCAST_API_KEY environment variable.
  *
- * Each analysis costs at most one API call. Results are cached for 30 days per address, and
+ * At most ONE API call per address: results are cached for 30 days per address (whatever bedroom
+ * count was asked for first; a later run with a different count reuses it rather than paying again), and
  * calls stop at RENTCAST_MONTHLY_LIMIT per calendar month (default 50, the free plan) so the
  * app never runs into overage charges. The counter lives in memory, so it restarts with the server.
  */
@@ -81,14 +82,14 @@ const UNIT_SQFT = { 1: 650, 2: 900, 3: 1150, 4: 1400 } as const;
 
 export async function rentEstimate(
   address: string,
-  building: { units: number; bedsPerUnit: number; sqftPerUnit?: number | null },
+  building: { units: number; bedsPerUnit: number; sqftPerUnit?: number | null; bedsEntered?: boolean },
   signal?: AbortSignal,
 ): Promise<RentEstimate | null> {
   const key = process.env.RENTCAST_API_KEY;
   if (!key) return null;
   const multi = building.units > 1;
   const beds = Math.min(Math.max(Math.round(building.bedsPerUnit), 1), 4) as 1 | 2 | 3 | 4;
-  const k = `${address.toUpperCase().replace(/\s+/g, ' ').trim()}|${multi ? `unit-${beds}` : 'house'}`;
+  const k = address.toUpperCase().replace(/\s+/g, ' ').trim();
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
 
@@ -100,6 +101,7 @@ export async function rentEstimate(
   const url = new URL(API);
   url.searchParams.set('address', address);
   url.searchParams.set('compCount', '10');
+  if (!multi && building.bedsEntered) url.searchParams.set('bedrooms', String(beds));
   if (multi) {
     url.searchParams.set('propertyType', 'Apartment');
     url.searchParams.set('bedrooms', String(beds));

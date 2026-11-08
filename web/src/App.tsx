@@ -22,6 +22,7 @@ const Icon = ({ d, size = 18 }: { d: ReactNode; size?: number }) => (
     {d}
   </svg>
 );
+const IconBed = () => <Icon d={<><path d="M3 18V7" /><path d="M3 14h18v4" /><path d="M21 14v-2a3 3 0 0 0-3-3h-7v5" /><circle cx="7" cy="11" r="1.6" /></>} />;
 const IconPin = () => <Icon d={<><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></>} />;
 const IconDollar = () => <Icon d={<><path d="M12 3v18" /><path d="M16.5 7.5c-.8-1.3-2.4-2-4.5-2-2.6 0-4 1.3-4 3s1.6 2.5 4 3 4 1.4 4 3.2-1.5 3.3-4.2 3.3c-2 0-3.7-.8-4.6-2.2" /></>} />;
 const IconArrow = () => <Icon d={<><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></>} />;
@@ -649,6 +650,7 @@ const STEPS = ['Finding the property', 'Pulling nearby sales', 'Estimating ARV',
 export function App() {
   const [address, setAddress] = useState('');
   const [allIn, setAllIn] = useState('');
+  const [beds, setBeds] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -674,7 +676,7 @@ export function App() {
       const r = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ address, allInCost: v }),
+        body: JSON.stringify({ address, allInCost: v, beds: Number(beds) || undefined }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.ref ? `${d.error} (ref ${d.ref})` : d.error);
@@ -729,6 +731,23 @@ export function App() {
                 }}
               />
             </div>
+            <label htmlFor="beds">
+              Bedrooms <span className="opt">optional, total for the property</span>
+            </label>
+            <div className="field">
+              <span className="field-icon"><IconBed /></span>
+              <input
+                id="beds"
+                className="input"
+                inputMode="numeric"
+                placeholder="From public records"
+                value={beds}
+                onChange={(e) => setBeds(e.target.value.replace(/[^\d]/g, '').slice(0, 2))}
+              />
+            </div>
+            <p className="form-hint">
+              Fill in if the records are wrong. Count only legal bedrooms: a closet and an egress window.
+            </p>
             <p className="form-hint">
               Use your underwriting spreadsheet for the all-in cost; the loan equals it on a 30-year mortgage. For St. Louis City and
               County addresses we also estimate the ARV and check you’re at or under 75% of it.

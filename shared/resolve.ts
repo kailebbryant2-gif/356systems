@@ -231,7 +231,7 @@ export function resolve(a: ResolveArgs): Analysis {
     rentPerUnit = localPerUnit;
     rentSource = 'default';
     const b = a.localRent!.byBedrooms;
-    rentNote = `${a.localRent!.note}: 1-bed $${b[1]}, 2-bed $${b[2]}, 3-bed $${b[3]}, 4-bed $${b[4]}. General guide; real rental comps are better.${hudPerUnit ? ` HUD benchmark: ${money(hudPerUnit)}.` : ''}`;
+    rentNote = `${mr?.beds ? `The rent estimate on file for this address is for a ${mr.beds}-bed, so it isn’t used for ${bedsPerUnit} bedrooms. ` : ''}${a.localRent!.note}: 1-bed $${b[1]}, 2-bed $${b[2]}, 3-bed $${b[3]}, 4-bed $${b[4]}. General guide; real rental comps are better.${hudPerUnit ? ` HUD benchmark: ${money(hudPerUnit)}.` : ''}`;
   } else if (hudPerUnit) {
     rentPerUnit = hudPerUnit;
     rentNote = `HUD Fair Market Rent ${a.fmr!.year} for a ${bedsPerUnit}-bed${a.fmr!.zipLevel ? ` in ZIP ${a.geo.zip}` : ` in ${a.fmr!.areaName}`}. Conservative (40th percentile); check against rental comps.`;
