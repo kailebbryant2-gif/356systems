@@ -30,7 +30,6 @@ const IconCheck = () => <Icon size={16} d={<path d="M5 12.5l4.5 4.5L19 7.5" />} 
 const IconTag = () => <Icon d={<><path d="M3 12V4h8l10 10-8 8z" /><circle cx="7.5" cy="8.5" r="1.3" /></>} />;
 const IconHome = () => <Icon d={<><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-5h4v5" /></>} />;
 const IconBank = () => <Icon d={<><path d="M3 9l9-5 9 5" /><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8" /><path d="M3 20h18" /></>} />;
-const IconRuler = () => <Icon d={<><path d="M4 16L16 4l4 4L8 20z" /><path d="M8 12l2 2M11 9l2 2M14 6l2 2" /></>} />;
 
 const ARROW_LOGO = (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -163,7 +162,7 @@ function Verdict({ a }: { a: Analysis }) {
           </div>
           <h2>{a.verdict.headline}</h2>
           <p className="muted">
-            {a.address.matched} · {money(a.purchasePrice)}
+            {a.address.matched} · {money(a.allInCost)} all-in
           </p>
         </div>
       </div>
@@ -205,23 +204,13 @@ function Kpis({ a }: { a: Analysis }) {
       meter: known && <Meter value={s.cashFlowPerUnitMonthly} target={150} max={225} />,
     },
     {
-      label: 'Cash-on-cash',
-      value: known ? pct(s.cashOnCash) : '—',
-      sub: 'target 10%',
-      meter: known && <Meter value={s.cashOnCash} target={0.1} max={0.15} />,
-    },
-    {
       label: 'DSCR',
       value: known ? ratio(s.dscr) : '—',
       sub: 'lenders want 1.20+',
       meter: known && <Meter value={s.dscr} target={1.2} max={1.8} />,
     },
-    {
-      label: 'Cash to close',
-      value: money(a.result.acquisition.cashInvested),
-      sub: a.rehab.cost > 0 ? `incl. ${money(a.rehab.cost)} rehab` : 'down + closing',
-      meter: null,
-    },
+    { label: 'Loan', value: money(a.loan.amount), sub: `= all-in cost · ${a.loan.years} yrs`, meter: null },
+    { label: 'Mortgage', value: `${money(a.loan.monthlyPayment)}`, sub: `per month at ${pct(a.loan.rate, 1)}`, meter: null },
   ];
   return (
     <section className="kpis">
@@ -239,7 +228,7 @@ function Kpis({ a }: { a: Analysis }) {
 
 const SEGMENTS = [
   { key: 'vacancy', label: 'Vacancy', color: '#c9801a' },
-  { key: 'expenses', label: 'Operating expenses', color: '#3d76d9' },
+  { key: 'expenses', label: 'Taxes, insurance, utilities, maintenance', color: '#3d76d9' },
   { key: 'mortgage', label: 'Mortgage', color: '#a03c87' },
   { key: 'cashflow', label: 'Cash flow', color: '#01af8d' },
 ] as const;
@@ -260,9 +249,9 @@ function RentBreakdown({ a }: { a: Analysis }) {
     <section className="card reveal" style={reveal(5)}>
       <div className="card-head">
         <h3>Where the rent goes</h3>
-        <span className="muted small">{money(m(s.grossPotentialIncome))}/mo stabilized rent</span>
+        <span className="muted small">{money(m(s.grossPotentialIncome))}/mo rent</span>
       </div>
-      <div className="stack" role="img" aria-label="Monthly rent split into vacancy, operating expenses, mortgage and cash flow">
+      <div className="stack" role="img" aria-label="Monthly rent split into vacancy, expenses, mortgage and cash flow">
         {SEGMENTS.map((g) =>
           values[g.key] > 0 ? (
             <span
@@ -283,9 +272,7 @@ function RentBreakdown({ a }: { a: Analysis }) {
           </li>
         ))}
       </ul>
-      {shortfall > 0 && (
-        <p className="shortfall">Rent doesn’t cover everything: you’d add {money(shortfall)}/mo out of pocket.</p>
-      )}
+      {shortfall > 0 && <p className="shortfall">Rent doesn’t cover everything: you’d add {money(shortfall)}/mo out of pocket.</p>}
     </section>
   );
 }
@@ -293,40 +280,35 @@ function RentBreakdown({ a }: { a: Analysis }) {
 function MakeItWork({ a }: { a: Analysis }) {
   const sol = a.solutions;
   const rent = a.result.stabilized.grossPotentialIncome / 12;
-  const units = a.result.acquisition.purchasePrice / a.result.acquisition.pricePerUnit;
   const tiles = [
     {
       icon: <IconTag />,
-      title: 'Price that works',
-      value: sol.maxPrice ? money(sol.maxPrice) : 'None',
-      text: sol.maxPrice
-        ? sol.maxPrice >= a.purchasePrice
-          ? `Room to spare: targets still pass up to ${money(sol.maxPrice)}.`
-          : `${money(a.purchasePrice - sol.maxPrice)} below your price.`
-        : 'No price clears all three at these rents and terms.',
+      title: 'All-in cost that works',
+      value: sol.maxAllIn ? money(sol.maxAllIn) : 'None',
+      text: sol.maxAllIn
+        ? sol.maxAllIn >= a.allInCost
+          ? `Room to spare: still works up to ${money(sol.maxAllIn)} all-in.`
+          : `${money(a.allInCost - sol.maxAllIn)} less than your all-in cost.`
+        : 'No all-in cost clears both targets at this rent.',
     },
     {
       icon: <IconHome />,
       title: 'Rent it needs',
-      value: sol.requiredMonthlyRent ? `${money(sol.requiredMonthlyRent)}` : '—',
+      value: sol.requiredMonthlyRent ? money(sol.requiredMonthlyRent) : '—',
       text: sol.requiredMonthlyRent
-        ? `${money(sol.requiredMonthlyRent / units)}/unit${a.rentKnown ? ` vs ${money(rent / units)} modeled` : ''}.`
-        : 'Not solvable at this price.',
+        ? `${money(sol.requiredMonthlyRent / a.units)}/unit${a.rentKnown ? ` vs ${money(rent / a.units)} modeled` : ''}. Check your Zillow rental comps.`
+        : 'Not solvable at this all-in cost.',
     },
     {
       icon: <IconBank />,
-      title: 'Down payment it needs',
-      value: sol.requiredDownPct !== null ? pct(sol.requiredDownPct, 0) : '—',
+      title: 'Cash you’d need to put in',
+      value: sol.cashNeeded === null ? '—' : money(sol.cashNeeded),
       text:
-        sol.requiredDownPct !== null && sol.requiredDownCash !== null
-          ? `${money(sol.requiredDownCash)} down fixes DSCR and cash flow.`
-          : 'Even all cash wouldn’t clear the targets.',
-    },
-    {
-      icon: <IconRuler />,
-      title: '75% rule offer',
-      value: money(Math.max(sol.seventyFiveRuleMaxOffer, 0)),
-      text: 'Price + rehab ≤ 75% of after-repair value.',
+        sol.cashNeeded === null
+          ? 'Even with no loan the rent wouldn’t clear the targets.'
+          : sol.cashNeeded === 0
+            ? 'None: it works fully financed.'
+            : 'Paying this much down (a smaller loan) gets DSCR and cash flow to target.',
     },
   ];
   return (
@@ -335,7 +317,7 @@ function MakeItWork({ a }: { a: Analysis }) {
         <h3>What would make it work</h3>
         <p className="muted small">Math thresholds under these assumptions, not what a seller or lender will accept.</p>
       </div>
-      <div className="solve-grid">
+      <div className="solve-grid solve-3">
         {tiles.map((t) => (
           <div key={t.title} className="solve-tile">
             <span className="solve-icon">{t.icon}</span>
@@ -349,12 +331,53 @@ function MakeItWork({ a }: { a: Analysis }) {
   );
 }
 
+function LoanOptions({ a }: { a: Analysis }) {
+  return (
+    <section className="card reveal" style={reveal(7)}>
+      <div className="card-head">
+        <h3>Loan options at {money(a.loan.amount)}</h3>
+        <span className="muted small">Loan = your all-in cost</span>
+      </div>
+      <div className="fin-list">
+        {a.loanOptions.map((o) => (
+          <div key={o.id} className={`fin fin-static ${o.id === 'base' ? 'fin-base' : ''}`}>
+            <div className="fin-row">
+              <div className="fin-name">
+                <strong>{o.name}</strong>
+                <span>{o.detail}</span>
+              </div>
+              <div className="fin-nums">
+                <div>
+                  <span>Payment / mo</span>
+                  <strong>{money(o.monthlyPayment)}</strong>
+                </div>
+                <div>
+                  <span>Cash flow / mo</span>
+                  <strong className={a.rentKnown ? (o.monthlyCashFlow >= 0 ? 'pos' : 'neg') : ''}>
+                    {a.rentKnown ? money(o.monthlyCashFlow) : '—'}
+                  </strong>
+                </div>
+                <div className="fin-dscr">
+                  <span>DSCR</span>
+                  <strong>{a.rentKnown ? ratio(o.dscr) : '—'}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="fine">Rates at prime. Your lender’s quote decides the actual rate and term.</p>
+    </section>
+  );
+}
+
 function ValueCard({ a }: { a: Analysis }) {
   const v = a.valueAdd;
   if (!v) return null;
   const drop = v.value - v.valueIfCapUp;
+  const equity = v.value - a.allInCost;
   return (
-    <section className="card reveal" style={reveal(7)}>
+    <section className="card reveal" style={reveal(8)}>
       <div className="card-head">
         <h3>What raises the value</h3>
         <span className="muted small">Value = NOI ÷ {pct(v.capRate, 0)} cap rate</span>
@@ -365,8 +388,11 @@ function ValueCard({ a }: { a: Analysis }) {
           <strong>{money(v.value)}</strong>
         </div>
         <div>
-          <span>Every +$1,000/yr of NOI</span>
-          <strong className="pos">+{money(v.perThousandNoi)}</strong>
+          <span>vs. your all-in cost</span>
+          <strong className={equity >= 0 ? 'pos' : 'neg'}>
+            {equity >= 0 ? '+' : '−'}
+            {money(Math.abs(equity))}
+          </strong>
         </div>
         <div>
           <span>If cap rates rise 1 point</span>
@@ -390,148 +416,8 @@ function ValueCard({ a }: { a: Analysis }) {
         {v.incomeValued
           ? 'Buildings with 5+ units are valued on income, so every operating improvement shows up in value. '
           : 'Lenders value 1–4 units on sales comps, so treat these as income-based indications. '}
-        “Worth spending up to” = pays for itself within 3 years. Cap rate stressed to {pct(v.capRate, 0)}; ask several brokers (not the listing broker) what similar stabilized buildings trade at,
-        then underwrite 0.5–1 point higher.
+        “Worth spending up to” = pays for itself within 3 years. Every +$1,000/yr of NOI adds about {money(v.perThousandNoi)} of value.
       </p>
-    </section>
-  );
-}
-
-function FinancingOptions({ a }: { a: Analysis }) {
-  const rows = a.financing.options;
-  return (
-    <section className="card reveal" style={reveal(7)}>
-      <div className="card-head">
-        <h3>Ways to finance it</h3>
-        <span className="muted small">Same property and rents, different loans</span>
-      </div>
-      <div className="fin-list">
-        {rows.map((o) => {
-          const known = a.rentKnown;
-          const cf = o.monthlyCashFlow;
-          return (
-            <details key={o.id} className={`fin ${o.id === 'base' ? 'fin-base' : ''}`}>
-              <summary>
-                <div className="fin-name">
-                  <strong>{o.name}</strong>
-                  <span>{o.detail}</span>
-                </div>
-                <div className="fin-nums">
-                  <div>
-                    <span>Cash in</span>
-                    <strong>{money(o.cashToClose)}</strong>
-                  </div>
-                  <div>
-                    <span>{o.id === 'fha' ? 'Net / mo' : 'Cash flow / mo'}</span>
-                    <strong className={known ? (cf >= 0 ? 'pos' : 'neg') : ''}>{known ? money(cf) : '—'}</strong>
-                  </div>
-                  <div className="fin-dscr">
-                    <span>DSCR</span>
-                    <strong>{known && o.dscr !== null && o.id !== 'fha' ? ratio(o.dscr) : '—'}</strong>
-                  </div>
-                </div>
-              </summary>
-              <p className="fin-note">
-                {o.id === 'fha' && known && cf < 0 ? `You’d live there for about ${money(-cf)}/mo after the other units’ rent. ` : ''}
-                {o.note}
-              </p>
-            </details>
-          );
-        })}
-      </div>
-      <p className="fine">Tap a row for details. Rates are screening defaults; your lender’s quote decides.</p>
-    </section>
-  );
-}
-
-function Brrrr({ a }: { a: Analysis }) {
-  const b = a.financing.brrrr;
-  if (!b || !a.rentKnown) return null;
-  const out = b.cashLeftInDeal <= 0;
-  const steps = [
-    { k: 'Buy & rehab with hard money', v: money(b.hardMoneyLoan), sub: b.fullyFunded ? 'covers price + rehab' : 'capped at 75% of ARV' },
-    { k: 'Your cash at purchase', v: money(b.cashAtPurchase), sub: 'closing, points, any gap' },
-    { k: 'Holding costs', v: money(b.holdingCosts), sub: '6 months of interest' },
-    { k: 'Refinance at 80% of ARV', v: money(b.refiLoan), sub: `${money(b.refiClosing)} refi costs` },
-  ];
-  return (
-    <section className="card reveal brrrr" style={reveal(8)}>
-      <div className="card-head">
-        <h3>Buy, rehab, rent, refinance</h3>
-        <span className="muted small">Hard money in, bank loan out</span>
-      </div>
-      <ol className="steps">
-        {steps.map((s, i) => (
-          <li key={s.k}>
-            <span className="step-n">{i + 1}</span>
-            <div className="step-k">{s.k}<small>{s.sub}</small></div>
-            <div className="step-v">{s.v}</div>
-          </li>
-        ))}
-      </ol>
-      <div className={`brrrr-result ${out ? 'good' : ''}`}>
-        <div>
-          <span>{out ? 'Cash pulled out' : 'Cash left in the deal'}</span>
-          <strong>{money(Math.abs(b.cashLeftInDeal))}</strong>
-        </div>
-        <div>
-          <span>Cash flow after refi</span>
-          <strong>{money(b.monthlyCashFlowAfter)}/mo</strong>
-        </div>
-        <div>
-          <span>DSCR after refi</span>
-          <strong>{ratio(b.dscrAfter)}</strong>
-        </div>
-      </div>
-      <div className="low-appraisal">
-        <span>
-          If it appraises 10% low ({money(b.lowAppraisal.value)}): refinance {money(b.lowAppraisal.refiLoan)}
-        </span>
-        <strong className={b.lowAppraisal.cashLeftInDeal > 0 ? 'neg' : 'pos'}>
-          {b.lowAppraisal.cashLeftInDeal > 0
-            ? `${money(b.lowAppraisal.cashLeftInDeal)} left in`
-            : `${money(-b.lowAppraisal.cashLeftInDeal)} out`}
-        </strong>
-      </div>
-      {b.privateMoneySavings > 0 && (
-        <p className="tip">
-          With a private lender at ~8% and 1 point instead of hard money, you’d save about {money(b.privateMoneySavings)} in points and
-          interest.
-        </p>
-      )}
-      <p className="fine">{b.note} ARV here is an estimate: underwrite at the low end of your comps, and give the appraiser your rents, renovation list and comps up front.</p>
-    </section>
-  );
-}
-
-function Partnership({ a }: { a: Analysis }) {
-  const p = a.financing.partnership;
-  if (!a.rentKnown) return null;
-  return (
-    <section className="card reveal" style={reveal(9)}>
-      <div className="card-head">
-        <h3>With a 50/50 money partner</h3>
-        <span className="muted small">They bring the cash, you do the work</span>
-      </div>
-      <div className="split">
-        <div className="split-col">
-          <span className="split-who">Partner</span>
-          <div className="split-row"><span>Puts in</span><strong>{money(p.partnerCash)}</strong></div>
-          {p.returnedAtRefi > 0 && <div className="split-row"><span>Gets back at refi</span><strong>{money(p.returnedAtRefi)}</strong></div>}
-          <div className="split-row"><span>Equity</span><strong>{money(p.partnerEquity)}</strong></div>
-          <div className="split-row"><span>Cash flow</span><strong>{money(p.monthlyCashFlowEach)}/mo</strong></div>
-          {p.partnerCashOnCash !== null && (
-            <div className="split-row"><span>Cash-on-cash</span><strong>{pct(p.partnerCashOnCash)}</strong></div>
-          )}
-        </div>
-        <div className="split-col you">
-          <span className="split-who">You</span>
-          <div className="split-row"><span>Puts in</span><strong>$0</strong></div>
-          <div className="split-row"><span>Equity</span><strong>{money(p.yourEquity)}</strong></div>
-          <div className="split-row"><span>Cash flow</span><strong>{money(p.monthlyCashFlowEach)}/mo</strong></div>
-        </div>
-      </div>
-      <p className="fine">{p.note}</p>
     </section>
   );
 }
@@ -541,25 +427,18 @@ type Period = 'monthly' | 'annual';
 function Statement({ a }: { a: Analysis }) {
   const [period, setPeriod] = useState<Period>('monthly');
   const d = period === 'monthly' ? 12 : 1;
-  const c = a.result.current;
   const s = a.result.stabilized;
   const ls = a.lineSources;
-  const uniq = (xs: Source[]) => xs.filter((x, i) => xs.indexOf(x) === i);
-  const showCur = a.currentRentKnown;
-  const line = (label: string, cur: number, stab: number, src: Source | Source[], opts: { neg?: boolean; strong?: boolean } = {}) => {
-    const srcs = Array.isArray(src) ? src : [src];
-    return (
-      <tr className={opts.strong ? 'strong' : ''}>
-        <td>
-          {label} {srcs.map((x, i) => <Tag key={i} source={x} />)}
-        </td>
-        {showCur && <td>{money((opts.neg ? -cur : cur) / d)}</td>}
-        <td>{money((opts.neg ? -stab : stab) / d)}</td>
-      </tr>
-    );
-  };
+  const line = (label: string, v: number, src: Source | null, opts: { neg?: boolean; strong?: boolean } = {}) => (
+    <tr className={opts.strong ? 'strong' : ''}>
+      <td>
+        {label} {src && <Tag source={src} />}
+      </td>
+      <td>{money((opts.neg ? -v : v) / d)}</td>
+    </tr>
+  );
   return (
-    <details className="card section reveal" style={reveal(7)} open>
+    <details className="card section reveal" style={reveal(9)} open>
       <summary>
         <h3>Income, expenses &amp; cash flow</h3>
       </summary>
@@ -570,146 +449,34 @@ function Statement({ a }: { a: Analysis }) {
           </button>
         ))}
       </div>
-      {!showCur && (
-        <p className="tip">
-          The listing doesn’t show today’s rent, so there’s no “current vs. after” comparison, just the projection at market rent. Use a
-          listing that states the rents (or rent roll) to see both.
-        </p>
-      )}
       <div className="table-wrap">
         <table className="tbl">
-          <thead>
-            <tr>
-              <th />
-              {showCur && <th>Current</th>}
-              <th>{showCur ? 'Stabilized' : 'Projected'}</th>
-            </tr>
-          </thead>
           <tbody>
-            {line('Gross rent', c.grossPotentialIncome, s.grossPotentialIncome, uniq([ls.gpiCurrent, ls.gpiStabilized]))}
-            {line('Vacancy', c.vacancy, s.vacancy, ls.vacancy, { neg: true })}
-            {line('Effective income', c.effectiveIncome, s.effectiveIncome, [], { strong: true })}
-            {line('Property taxes', c.taxes, s.taxes, uniq([ls.taxesCurrent, ls.taxesStabilized]), { neg: true })}
-            {line('Insurance', c.insurance, s.insurance, ls.insurance, { neg: true })}
-            {line('Management', c.management, s.management, ls.management, { neg: true })}
-            {line('Maintenance', c.maintenance, s.maintenance, ls.maintenance, { neg: true })}
-            {line('Water, sewer, trash', c.waterSewerTrash, s.waterSewerTrash, ls.utilities, { neg: true })}
-            {line('Lawn & snow', c.lawnSnow, s.lawnSnow, ls.utilities, { neg: true })}
-            {line('Operating expenses', c.operatingExpenses, s.operatingExpenses, [], { neg: true, strong: true })}
-            {line('Net operating income (NOI)', c.noi, s.noi, [], { strong: true })}
-            {line('Mortgage (P&I)', c.debtService, s.debtService, ls.financing, { neg: true })}
-            {line('Cash flow', c.cashFlow, s.cashFlow, [], { strong: true })}
+            {line('Gross rent', s.grossPotentialIncome, ls.rent)}
+            {line('Vacancy', s.vacancy, ls.vacancy, { neg: true })}
+            {line('Effective income', s.effectiveIncome, null, { strong: true })}
+            {line('Property taxes', s.taxes, ls.taxes, { neg: true })}
+            {line('Insurance', s.insurance, ls.insurance, { neg: true })}
+            {line('Utilities (water, sewer, trash)', s.waterSewerTrash, ls.utilities, { neg: true })}
+            {line('Maintenance', s.maintenance, ls.maintenance, { neg: true })}
+            {line('Operating expenses', s.operatingExpenses, null, { neg: true, strong: true })}
+            {line('Net operating income (NOI)', s.noi, null, { strong: true })}
+            {line(`Mortgage (${a.loan.years}-yr, ${pct(a.loan.rate, 1)})`, s.debtService, ls.loan, { neg: true })}
+            {line('Cash flow', s.cashFlow, null, { strong: true })}
           </tbody>
           <tbody className="ratios">
             <tr>
               <td>DSCR</td>
-              {showCur && <td>{ratio(c.dscr)}</td>}
               <td>{ratio(s.dscr)}</td>
             </tr>
             <tr>
-              <td>Expense ratio</td>
-              {showCur && <td>{pct(c.expenseRatio)}</td>}
+              <td>Expense ratio (incl. vacancy)</td>
               <td>{pct(s.expenseRatio)}</td>
             </tr>
-            <tr>
-              <td>Cash-on-cash</td>
-              {showCur && <td>{pct(c.cashOnCash)}</td>}
-              <td>{pct(s.cashOnCash)}</td>
-            </tr>
           </tbody>
         </table>
       </div>
-      <p className="fine">
-        {showCur
-          ? 'Current = today’s rent from the listing. Stabilized = after any rehab, at market rent with taxes reassessed after purchase.'
-          : 'Projected = market rent with taxes reassessed after purchase.'}
-      </p>
-    </details>
-  );
-}
-
-function Acquisition({ a }: { a: Analysis }) {
-  const q = a.result.acquisition;
-  const rows: [string, string, Source | null][] = [
-    ['Purchase price', money(q.purchasePrice), 'user'],
-    ['Price per unit', money(q.pricePerUnit), null],
-    ['Closing costs', money(q.closingCosts), 'default'],
-    ['Down payment', `${money(q.downPayment)} (${pct(q.downPayment / q.purchasePrice, 0)})`, 'default'],
-    ['Loan amount', money(q.loanAmount), null],
-    ['Monthly payment (P&I)', money(q.monthlyPayment), 'default'],
-    ['Rehab budget', `${money(a.rehab.cost)} · ${a.rehab.scope === 'unknown' ? 'condition unknown' : a.rehab.scope}`, a.lineSources.rehab],
-    ['Cash to close', money(q.cashInvested), null],
-    ['After-repair value (ARV)', money(q.arv), 'estimate'],
-    ['Forced appreciation', money(q.forcedAppreciation), null],
-    ['Going-in cap rate', pct(q.goingInCapRate), null],
-    ['Yield on cost', pct(q.yieldOnCost), null],
-  ];
-  return (
-    <details className="card section reveal" style={reveal(8)}>
-      <summary>
-        <h3>Purchase, financing &amp; rehab</h3>
-      </summary>
-      <dl className="kv">
-        {rows.map(([k, v, src]) => (
-          <div key={k}>
-            <dt>
-              {k} {src && <Tag source={src} />}
-            </dt>
-            <dd>{v}</dd>
-          </div>
-        ))}
-      </dl>
-      <p className="fine">
-        Forced appreciation = ARV − price − closing − rehab. Yield on cost = stabilized NOI ÷ all-in cost. Rehab uses $30 / $50 / $75 per sq ft
-        bands for cosmetic / substantial / gut work. It’s a screening estimate, not a contractor bid.
-      </p>
-    </details>
-  );
-}
-
-function Returns({ a }: { a: Analysis }) {
-  const ys = a.result.years;
-  const row = (label: string, f: (y: (typeof ys)[number]) => string, strong = false) => (
-    <tr className={strong ? 'strong' : ''}>
-      <td>{label}</td>
-      {ys.map((y) => (
-        <td key={y.year}>{f(y)}</td>
-      ))}
-    </tr>
-  );
-  return (
-    <details className="card section reveal" style={reveal(9)}>
-      <summary>
-        <h3>5-year returns</h3>
-      </summary>
-      <div className="table-wrap">
-        <table className="tbl tbl-wide">
-          <thead>
-            <tr>
-              <th />
-              {ys.map((y) => (
-                <th key={y.year}>Yr {y.year}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {row('Cash flow', (y) => money(y.cashFlow))}
-            {row('Tax effect', (y) => money(y.taxEffect, { sign: true }))}
-            {row('Principal paydown', (y) => money(y.principal))}
-            {row('Appreciation', (y) => money(y.appreciation))}
-            {row('Total return', (y) => money(y.totalReturn), true)}
-            {row('Total ROI', (y) => pct(y.totalRoi), true)}
-            {row('Cash-on-cash', (y) => pct(y.cashFlowRoi))}
-            {row('Equity', (y) => money(y.equity))}
-            {row('Net wealth created', (y) => money(y.netWealthCreated))}
-          </tbody>
-        </table>
-      </div>
-      <p className="fine">
-        Only cash flow is cash in your pocket. Paydown and appreciation build equity you can’t spend until you sell or refinance. Year 1
-        includes one-time forced appreciation. Tax effect = −(NOI − interest − depreciation) × 25%; a negative number means tax owed.
-        Passive-loss rules and depreciation recapture can change this, so ask a CPA.
-      </p>
+      <p className="fine">Cash flow = rent − vacancy − taxes − insurance − utilities − maintenance − mortgage.</p>
     </details>
   );
 }
@@ -733,21 +500,18 @@ function Assumptions({ a }: { a: Analysis }) {
           </li>
         ))}
       </ul>
-      <p className="fine">
-        Listing: {a.listing.detail}
-        {a.listing.status === 'used' && a.listing.photos.length > 0 ? ` ${a.listing.photos.length} photos found.` : ''}
-      </p>
+      <p className="fine">Listing: {a.listing.detail}</p>
     </details>
   );
 }
 
 // ---------------- App ----------------
 
-const STEPS = ['Finding the property', 'Reading the listing', 'Pulling market rents', 'Estimating taxes & rehab', 'Running the numbers'];
+const STEPS = ['Finding the property', 'Reading rental comps', 'Pulling market rents', 'Estimating expenses', 'Running the numbers'];
 
 export function App() {
   const [address, setAddress] = useState('');
-  const [price, setPrice] = useState('');
+  const [allIn, setAllIn] = useState('');
   const [link, setLink] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
@@ -765,16 +529,16 @@ export function App() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const p = Number(price.replace(/,/g, ''));
+    const v = Number(allIn.replace(/,/g, ''));
     if (address.trim().length < 5) return setError('Enter the property address.');
-    if (!p) return setError('Enter the purchase price.');
+    if (!v) return setError('Enter your all-in cost.');
     setLoading(true);
     setResult(null);
     try {
       const r = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ address, purchasePrice: p, listingUrl: link.trim() }),
+        body: JSON.stringify({ address, allInCost: v, listingUrl: link.trim() }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.ref ? `${d.error} (ref ${d.ref})` : d.error);
@@ -806,7 +570,7 @@ export function App() {
             <h1>
               Know if a deal works <span className="hl">before you offer.</span>
             </h1>
-            <p>Address, price and listing link in. Rent, expenses, NOI, cash flow, DSCR and the price that makes it work out.</p>
+            <p>Address, all-in cost and a Zillow link in. Rent, expenses, NOI, mortgage, cash flow and DSCR out.</p>
           </section>
 
           <form className="card form" onSubmit={submit} noValidate>
@@ -814,25 +578,27 @@ export function App() {
             <AddressInput value={address} onChange={setAddress} />
             <div className="row2">
               <div>
-                <label htmlFor="price">Purchase price</label>
+                <label htmlFor="allin">
+                  All-in cost <span className="opt">purchase + rehab + closing</span>
+                </label>
                 <div className="field">
                   <span className="field-icon"><IconDollar /></span>
                   <input
-                    id="price"
+                    id="allin"
                     className="input"
                     inputMode="numeric"
-                    placeholder="250,000"
-                    value={price}
+                    placeholder="90,000"
+                    value={allIn}
                     onChange={(e) => {
                       const digits = e.target.value.replace(/[^\d]/g, '').slice(0, 9);
-                      setPrice(digits ? Number(digits).toLocaleString('en-US') : '');
+                      setAllIn(digits ? Number(digits).toLocaleString('en-US') : '');
                     }}
                   />
                 </div>
               </div>
               <div>
                 <label htmlFor="link">
-                  Listing link <span className="opt">with photos</span>
+                  Zillow link <span className="opt">for rent</span>
                 </label>
                 <div className="field">
                   <span className="field-icon"><IconLink /></span>
@@ -841,13 +607,14 @@ export function App() {
                     className="input"
                     type="url"
                     inputMode="url"
-                    placeholder="https://…"
+                    placeholder="https://www.zillow.com/…"
                     value={link}
                     onChange={(e) => setLink(e.target.value)}
                   />
                 </div>
               </div>
             </div>
+            <p className="form-hint">Use your underwriting spreadsheet for the all-in cost. The loan is set equal to it on a 30-year mortgage.</p>
             <button className={`btn ${loading ? 'busy' : ''}`} type="submit" disabled={loading}>
               {loading ? (
                 <>
@@ -869,7 +636,7 @@ export function App() {
 
           {!result && (
             <ul className="trust">
-              <li><IconCheck /> Full underwriting</li>
+              <li><IconCheck /> Full cash-flow breakdown</li>
               <li><IconCheck /> Every number sourced</li>
               <li><IconCheck /> No sign-up</li>
             </ul>
@@ -881,10 +648,6 @@ export function App() {
               <Kpis a={result} />
               <RentBreakdown a={result} />
               <MakeItWork a={result} />
-              <ValueCard a={result} />
-              <FinancingOptions a={result} />
-              <Brrrr a={result} />
-              <Partnership a={result} />
               {result.warnings.length > 0 && (
                 <section className="card notes reveal" style={reveal(7)}>
                   <h3>Heads up</h3>
@@ -896,12 +659,12 @@ export function App() {
                 </section>
               )}
               <Statement a={result} />
-              <Acquisition a={result} />
-              <Returns a={result} />
+              <LoanOptions a={result} />
+              <ValueCard a={result} />
               <Assumptions a={result} />
               <p className="disclaimer">
                 Educational screening estimate based on standard underwriting assumptions and free public data (HUD Fair Market Rents, US
-                Census). Not an appraisal, inspection, loan approval or tax advice. Verify rents, taxes, insurance and rehab before you offer.
+                Census). Not an appraisal, loan approval or tax advice. Verify rents, taxes and insurance before you offer.
               </p>
             </div>
           )}

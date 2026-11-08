@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolve } from '../shared/resolve';
+import { monthlyPayment } from '../shared/engine/engine';
 import { parseListing } from '../shared/sources/listing';
 import type { GeocodedAddress } from '../shared/sources/geocode';
 
@@ -9,89 +10,92 @@ const geo: GeocodedAddress = {
   lat: 38.59, lon: -90.24,
 };
 const fmr = { byBedrooms: [955, 995, 1218, 1568, 1812] as [number, number, number, number, number], areaName: 'St. Louis, MO-IL HUD Metro FMR Area', year: 'FY2026', zipLevel: false };
-const html = `<html><head><meta property="og:title" content="3520 Wyoming St, St. Louis, MO 63118"></head>
-<body>Fourplex. 8 beds, 4 baths, 3,600 sq ft. Total monthly rent: $3,400. Annual taxes: $2,150. Needs updating.</body></html>`;
-const listing = { ok: true as const, facts: parseListing(html, 'https://example.com/3520-wyoming-st') };
-const base = { inputAddress: '3520 Wyoming St', geo, purchasePrice: 300000, fmr, fmrError: null, taxRate: { rate: 0.0091, level: 'state' as const, note: 'MO' } };
+const taxRate = { rate: 0.0091, level: 'state' as const, note: 'MO' };
+const page = (body: string) =>
+  parseListing(`<html><head><meta property="og:title" content="3520 Wyoming St, St. Louis, MO 63118"></head><body>${body}</body></html>`, 'https://www.zillow.com/homedetails/3520-Wyoming-St');
+const base = { inputAddress: '3520 Wyoming St', geo, fmr, fmrError: null, taxRate };
 
-describe('resolver', () => {
-  const a = resolve({ ...base, listing });
-  const src = Object.fromEntries(a.assumptions.map((r) => [r.key, r.source]));
+describe('all-in model', () => {
+  it('$90,000 all-in: loan = $90,000 on a 30-year mortgage at prime, cash flow after the five expenses', () => {
+    const a = resolve({ ...base, allInCost: 90000, listing: { ok: true, facts: page('Single family home. 3 beds, 1 bath. Rent Zestimate®: $1,300/mo') } });
+    const pmt = monthlyPayment(90000, 0.07, 30);
+    expect(a.loan.amount).toBe(90000);
+    expect(a.loan.years).toBe(30);
+    expect(a.result.acquisition.monthlyPayment).toBeCloseTo(pmt, 6);
+    expect(a.result.acquisition.cashInvested).toBe(0);
 
-  it('labels every input by source', () => {
-    expect(src).toMatchObject({ units: 'listing', currentRent: 'listing', marketRent: 'estimate', taxesCurrent: 'listing', down: 'default', rehab: 'estimate' });
-    expect(a.listing.status).toBe('used');
+    const s = a.result.stabilized;
+    const rent = 1300 * 12;
+    const expenses = 90000 * 0.0091 + 90000 * 0.006 + 0 + rent * 0.075; // taxes + insurance + utilities + maintenance
+    expect(s.insurance).toBe(540); // 0.6% of $90,000
+    expect(s.grossPotentialIncome).toBe(rent);
+    expect(s.vacancy).toBeCloseTo(rent * 0.075, 6);
+    expect(s.maintenance).toBeCloseTo(rent * 0.075, 6);
+    expect(s.operatingExpenses).toBeCloseTo(expenses, 6);
+    expect(s.management + s.lawnSnow).toBe(0);
+    expect(s.cashFlow).toBeCloseTo(rent - rent * 0.075 - expenses - pmt * 12, 6);
   });
 
-  it('single-family: no owner-paid utilities, lawn or RUBS', () => {
-    const sfrHtml = html.replace('Fourplex. ', 'Single family home. ').replace('8 beds, 4 baths', '3 beds, 2 baths');
-    const sfr = resolve({ ...base, listing: { ok: true, facts: parseListing(sfrHtml, 'https://example.com/3520-wyoming-st') } });
-    const s = sfr.result.stabilized;
-    expect(s.waterSewerTrash + s.lawnSnow + s.electricGas).toBe(0);
-    expect(sfr.valueAdd).toBeNull();
+  it('shows the loan options at that amount', () => {
+    const a = resolve({ ...base, allInCost: 90000, listing: null });
+    expect(a.loanOptions.map((o) => o.id)).toEqual(['base', 'amort25', 'amort20', 'shock']);
+    expect(a.loanOptions[0].monthlyPayment).toBeCloseTo(monthlyPayment(90000, 0.07, 30), 6);
+    expect(a.loanOptions[3].monthlyPayment).toBeCloseTo(monthlyPayment(90000, 0.08, 30), 6);
   });
 
-  it('only claims a current column when the listing states rent', () => {
-    expect(a.currentRentKnown).toBe(true);
-    expect(resolve({ ...base, listing: null }).currentRentKnown).toBe(false);
+  it('only tests DSCR and $/unit cash flow (no cash-on-cash with 100% financing)', () => {
+    const a = resolve({ ...base, allInCost: 90000, listing: null });
+    expect(a.checks.map((c) => c.id)).toEqual(['dscr', 'cashflow']);
   });
 
-  it('models loans at prime (7%)', () => {
-    expect(a.assumptions.find((r) => r.key === 'rate')!.value).toBe('7.0%');
+  it('multifamily: $75/unit utilities; single-family: none', () => {
+    const mf = resolve({ ...base, allInCost: 300000, listing: { ok: true, facts: page('Fourplex. 8 beds. Total monthly rent: $4,400.') } });
+    expect(mf.units).toBe(4);
+    expect(mf.result.stabilized.waterSewerTrash).toBe(75 * 4 * 12);
+    const sf = resolve({ ...base, allInCost: 150000, listing: { ok: true, facts: page('Single family home. 3 beds. Rent Zestimate: $1,500') } });
+    expect(sf.result.stabilized.waterSewerTrash).toBe(0);
+    expect(sf.valueAdd).toBeNull();
   });
 
-  it('uses standard defaults for a small multifamily', () => {
-    expect(a.result.acquisition.downPayment).toBe(75000); // 25%, small investor loans
-    expect(a.result.stabilized.waterSewerTrash).toBe(150 * 2 * 12); // $150 per 2 units
-    expect(a.result.stabilized.lawnSnow).toBe(480);
-    expect(a.result.current.grossPotentialIncome).toBe(3400 * 12);
-    expect(a.result.stabilized.grossPotentialIncome).toBe(1218 * 4 * 12);
-    expect(a.rehab.cost).toBe(50 * 3600);
+  it('uses the listing only for rent: taxes come from the all-in cost, not the listing', () => {
+    const a = resolve({ ...base, allInCost: 200000, listing: { ok: true, facts: page('Single family. Rent Zestimate: $1,600. Annual taxes: $9,999.') } });
+    expect(a.result.stabilized.taxes).toBeCloseTo(200000 * 0.0091, 6);
   });
 
-  it('taxes after purchase are not the historical bill', () => {
-    expect(a.result.stabilized.taxes).toBeCloseTo(Math.max(2150 * 1.1, 300000 * 0.0091), 6);
+  it('falls back to the HUD benchmark when the listing has no rent', () => {
+    const a = resolve({ ...base, allInCost: 120000, listing: null });
+    expect(a.result.stabilized.grossPotentialIncome).toBe(1218 * 12);
+    expect(a.assumptions.find((r) => r.key === 'rent')!.source).toBe('estimate');
   });
 
-  it('ignores a listing for a different property', () => {
-    const other = { ok: true as const, facts: parseListing(html.replaceAll('3520', '4100'), 'https://example.com/4100') };
-    const b = resolve({ ...base, listing: other });
-    expect(b.listing.status).toBe('mismatch');
-    expect(b.result.acquisition.pricePerUnit).toBe(300000); // falls back to 1 unit, flagged
-    expect(b.warnings.join(' ')).toMatch(/Unit count not found/);
+  it('solves the highest all-in cost that works and the cash needed at this one', () => {
+    const a = resolve({ ...base, allInCost: 160000, listing: { ok: true, facts: page('Single family. 3 beds. Rent Zestimate: $1,500') } });
+    expect(a.verdict.status).toBe('misses');
+    expect(a.solutions.maxAllIn!).toBeLessThan(160000);
+    expect(a.solutions.cashNeeded!).toBeGreaterThan(0);
+    const ok = resolve({ ...base, allInCost: a.solutions.maxAllIn!, listing: { ok: true, facts: page('Single family. 3 beds. Rent Zestimate: $1,500') } });
+    expect(ok.verdict.status).toBe('meets');
   });
 
-  it('never silently zeroes missing costs; rent-unknown still solves the required rent', () => {
-    const c = resolve({ ...base, listing: null, fmr: null, fmrError: 'HUD down', taxRate: null });
-    expect(c.rentKnown).toBe(false);
-    expect(c.verdict.status).toBe('rent_unknown');
-    expect(c.result.stabilized.taxes).toBeGreaterThan(0);
-    expect(c.result.stabilized.insurance).toBeGreaterThan(0);
-    expect(c.solutions.requiredMonthlyRent).toBeGreaterThan(0);
+  it('St. Louis City: taxes and units come from the official parcel record', () => {
+    const parcel = { parcelId: '1488-9-070.000', units: 2, annualTax: 2297.48, taxYear: 2025, assessedTotal: 29740, appraisedTotal: 156511, abated: false, zoning: 'B - Two Family Residential', yearBuilt: 1906 };
+    const a = resolve({ ...base, allInCost: 200000, parcel, listing: { ok: true, facts: page('Rent Zestimate: $2,400') } });
+    expect(a.result.stabilized.taxes).toBe(2297.48);
+    expect(a.assumptions.find((r) => r.key === 'taxes')!.source).toBe('verified');
+    expect(a.units).toBe(2);
+    expect(a.assumptions.find((r) => r.key === 'units')!.source).toBe('verified');
+    // A real tax bill doesn't change with the all-in cost in the solver.
+    expect(a.solutions.maxAllIn).not.toBeNull();
   });
 
-  it('estimates units from rent when the listing omits them', () => {
-    const noUnits = `<html><head><meta property="og:title" content="3520 Wyoming St, St. Louis, MO 63118"></head>
-<body>Brick building. Total monthly rent: $7,300.</body></html>`;
-    const b = resolve({ ...base, purchasePrice: 675000, listing: { ok: true, facts: parseListing(noUnits, 'https://example.com/3520-wyoming-st') } });
-    const units = b.assumptions.find((r) => r.key === 'units')!;
-    expect(units.source).toBe('estimate');
-    expect(Number(units.value)).toBe(Math.round(7300 / 1218)); // 6
-    expect(b.result.stabilized.waterSewerTrash).toBeGreaterThan(0);
+  it('warns when the parcel is tax-abated', () => {
+    const parcel = { parcelId: 'x', units: 1, annualTax: 300, taxYear: 2025, assessedTotal: 1, appraisedTotal: 1, abated: true, zoning: null, yearBuilt: null };
+    expect(resolve({ ...base, allInCost: 90000, parcel, listing: null }).warnings.join(' ')).toMatch(/abatement/);
   });
 
-  it('underwrites $1M+ or 5+ units as commercial (20% down, 20 years, 5% management)', () => {
-    const big = resolve({ ...base, purchasePrice: 2100000, listing });
-    expect(big.result.acquisition.downPayment).toBe(420000);
-    expect(big.assumptions.find((r) => r.key === 'amort')!.value).toBe('20 years');
-    expect(big.result.stabilized.management).toBeCloseTo(big.result.stabilized.grossPotentialIncome * 0.05, 6);
-    expect(big.result.acquisition.rehabOutOfPocket).toBeCloseTo(big.rehab.cost * 0.2, 6); // 80% loan-to-cost
-  });
-
-  it('stabilized rent: current + 7%, but at least the HUD benchmark', () => {
-    const highRent = html.replace('$3,400', '$6,000');
-    const c = resolve({ ...base, listing: { ok: true, facts: parseListing(highRent, 'https://example.com/3520-wyoming-st') } });
-    expect(c.result.stabilized.grossPotentialIncome).toBeCloseTo(6000 * 1.07 * 12, 6);
-    expect(a.result.stabilized.grossPotentialIncome).toBe(1218 * 4 * 12); // 3,400/4 + 7% is below HUD
+  it('ignores a listing for a different address', () => {
+    const other = parseListing('<html><head><meta property="og:title" content="4100 Wyoming St"></head><body>Rent Zestimate: $5,000</body></html>', 'https://www.zillow.com/homedetails/4100');
+    const a = resolve({ ...base, allInCost: 90000, listing: { ok: true, facts: other } });
+    expect(a.listing.status).toBe('mismatch');
   });
 });

@@ -1,10 +1,14 @@
-# Dealwise v2 — Multifamily Methods deal analyzer
+# Dealwise v2 — rental deal analyzer
 
-Three inputs (address, purchase price, listing link) → the full Multifamily Methods underwriting:
-purchase & financing, current vs. stabilized income and expenses, NOI, DSCR, cash flow, cash-on-cash,
-5-year returns (cash flow, tax effect, principal paydown, appreciation, equity), and what price / rent /
-down payment would make the deal hit the targets. Every input is tagged **Listing**, **Estimate**,
-**Assumption**, **Verified** or **You**.
+Three inputs: **address**, **all-in cost** (purchase + rehab + closing, from the underwriting spreadsheet) and a
+**Zillow link** (used only for rent). The loan equals the all-in cost on a 30-year mortgage at prime (7%).
+
+Cash flow = rent − vacancy (7.5%) − taxes − insurance (0.6% of all-in) − utilities ($75/unit multifamily,
+$0 single-family) − maintenance (7.5%) − mortgage. Taxes and unit count come from the official City of
+St. Louis parcel record when the address is in the City; otherwise taxes are estimated from the all-in cost.
+Rent comes from the listing, else the HUD Fair Market Rent. Targets: DSCR ≥ 1.20 and ≥ $150/unit/month.
+Results also show the highest all-in cost that works, the rent needed, cash needed to hit targets, loan
+options (30/25/20-year, +1% rate) and, for multifamily, what raises the value (NOI ÷ cap rate).
 
 ## Run it
 

@@ -136,7 +136,8 @@ export function parseListing(html: string, url: string): ListingFacts {
   const annualRe = /(gross (?:scheduled|annual|potential) (?:rent|rents|income)|annual (?:gross )?(?:rent|rents|rental income|income)|gross scheduled income|gsi|yearly rent)\s*(?:is|of|:)?\s*\$\s*([\d,]{4,9})/i;
   const monthlyRe = /((?:total |current |gross )?monthly (?:rent|rents|rental income|income)|(?:total|current|gross) rents?(?: per month)?|rents? total)\s*(?:is|of|:)?\s*\$\s*([\d,]{3,7})/i;
   const a = hay.match(annualRe);
-  const mo = hay.match(monthlyRe);
+  const zest = hay.match(/(rent zestimate)\s*(?:®|\(r\))?\s*:?\s*\$\s*([\d,]{3,7})/i);
+  const mo = hay.match(monthlyRe) ?? zest;
   if (a && num(a[2])) {
     monthlyRent = num(a[2])! / 12;
     rentBasis = a[0].trim();

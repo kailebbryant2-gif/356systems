@@ -282,6 +282,12 @@ body {
 
 .disclaimer { color: var(--faint); font-size: 12px; text-align: center; margin: 28px 8px 0; }
 
+.solve-3 { grid-template-columns: 1fr; }
+@media (min-width: 680px) { .solve-3 { grid-template-columns: repeat(3, 1fr); } }
+.form-hint { margin: 8px 0 0; color: var(--faint); font-size: 12.5px; }
+.fin-static .fin-row { display: grid; gap: 10px; padding: 12px 14px; }
+@media (min-width: 620px) { .fin-static .fin-row { grid-template-columns: 1fr auto; align-items: center; } }
+
 /* ---------- Value ---------- */
 .value-hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 14px; border-radius: 12px; background: var(--soft); }
 .value-hero div { display: grid; }

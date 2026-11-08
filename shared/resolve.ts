@@ -1,14 +1,20 @@
-import { analyzeDeal } from './engine/engine';
+import { analyzeDeal, monthlyPayment } from './engine/engine';
 import { DEFAULTS, TARGETS, MARKET } from './engine/defaults';
-import { checks, solve, type PriceLinks, type Solutions } from './engine/solver';
-import type { Check, DealInputs, DealResult, Source, Unit } from './engine/types';
+import { checks, solve, type PriceLinks } from './engine/solver';
+import type { Check, DealInputs, DealResult, Source, Targets, Unit } from './engine/types';
 import type { GeocodedAddress } from './sources/geocode';
 import type { FmrResult } from './sources/hud';
 import { listingMatchesAddress, type ListingFacts, type ListingStatus } from './sources/listing';
-import { estimateRehab, type RehabEstimate } from './sources/rehab';
-import { analyzeFinancing, type FinancingAnalysis } from './financing';
 import { analyzeValueAdd, type ValueAdd } from './valueAdd';
 import type { TaxRate } from './sources/taxes';
+import type { StlParcel } from './sources/stlCity';
+
+/**
+ * All-in model: the student brings an all-in cost (purchase + rehab + closing, from the
+ * underwriting spreadsheet). The loan equals the all-in cost, on a 30-year mortgage at prime.
+ * Cash flow = rent − (taxes + insurance + utilities + maintenance + vacancy) − mortgage.
+ * The listing link is used only for rent (and the unit count / beds needed to apply it).
+ */
 
 export interface AssumptionRow {
   key: string;
@@ -18,9 +24,18 @@ export interface AssumptionRow {
   note: string;
 }
 
+export interface LoanOption {
+  id: 'base' | 'amort25' | 'amort20' | 'shock';
+  name: string;
+  detail: string;
+  monthlyPayment: number;
+  monthlyCashFlow: number;
+  dscr: number;
+}
+
 export interface Analysis {
   address: { input: string; matched: string; county: string };
-  purchasePrice: number;
+  allInCost: number;
   verdict: {
     status: 'meets' | 'misses' | 'rent_unknown';
     headline: string;
@@ -28,17 +43,22 @@ export interface Analysis {
     confidenceReasons: string[];
   };
   rentKnown: boolean;
-  /** True only when the listing states today's rent; otherwise there is no real 'current' column. */
-  currentRentKnown: boolean;
+  units: number;
   result: DealResult;
   checks: Check[];
-  solutions: Solutions;
-  rehab: RehabEstimate;
+  solutions: {
+    /** Highest all-in cost (= loan) that meets DSCR 1.20 and $150/unit/month. */
+    maxAllIn: number | null;
+    /** Total monthly rent needed at this all-in cost. */
+    requiredMonthlyRent: number | null;
+    /** Cash you would need to put in (reducing the loan) to meet the targets. 0 = none needed. */
+    cashNeeded: number | null;
+  };
+  loan: { amount: number; rate: number; years: number; monthlyPayment: number };
+  loanOptions: LoanOption[];
   assumptions: AssumptionRow[];
-  listing: { status: 'used' | 'mismatch' | 'failed' | 'none'; detail: string; photos: string[] };
-  /** Source of the inputs behind each operating-statement line, for row tags. */
+  listing: { status: 'used' | 'mismatch' | 'failed' | 'none'; detail: string };
   lineSources: Record<string, Source>;
-  financing: FinancingAnalysis;
   valueAdd: ValueAdd | null;
   warnings: string[];
 }
@@ -46,318 +66,224 @@ export interface Analysis {
 export interface ResolveArgs {
   inputAddress: string;
   geo: GeocodedAddress;
-  purchasePrice: number;
+  allInCost: number;
   listing: ListingStatus | null;
   fmr: FmrResult | null;
   fmrError: string | null;
   taxRate: TaxRate | null;
+  /** Official City of St. Louis parcel record, when the address is in the City. */
+  parcel?: StlParcel | null;
 }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 const pct = (n: number, d = 1) => `${(n * 100).toFixed(d)}%`;
 
-/** Typical unit size when the listing doesn't state square footage. */
-const SQFT_BY_BEDS = [500, 700, 900, 1200, 1500];
+export const LOAN_YEARS = 30;
+/** Cash-on-cash has no meaning with 100% financing, so only DSCR and $/unit cash flow are tested. */
+const ALL_IN_TARGETS: Targets = { ...TARGETS, minCashOnCash: -Infinity };
 
 export function resolve(a: ResolveArgs): Analysis {
   const rows: AssumptionRow[] = [];
   const warnings: string[] = [];
   const add = (key: string, label: string, value: string, source: Source, note: string) =>
     rows.push({ key, label, value, source, note });
+  const allIn = a.allInCost;
 
-  // ---- Listing: only used if it matches the geocoded property ----
+  // ---- Listing (rent only): used only if it shows this address ----
   let facts: ListingFacts | null = null;
-  let listingStatus: Analysis['listing'] = { status: 'none', detail: 'No listing link provided.', photos: [] };
+  let listingStatus: Analysis['listing'] = { status: 'none', detail: 'No listing link provided.' };
   if (a.listing) {
     if (!a.listing.ok) {
-      listingStatus = { status: 'failed', detail: a.listing.detail, photos: [] };
+      listingStatus = { status: 'failed', detail: a.listing.detail };
       warnings.push(`Listing not used: ${a.listing.detail}`);
     } else if (!listingMatchesAddress(a.listing.facts, a.geo.houseNumber, a.geo.streetName)) {
-      listingStatus = {
-        status: 'mismatch',
-        detail: 'The listing page doesn’t show this address, so its facts and photos were not used.',
-        photos: [],
-      };
+      listingStatus = { status: 'mismatch', detail: 'The listing page doesn’t show this address, so it wasn’t used.' };
       warnings.push(listingStatus.detail);
     } else {
       facts = a.listing.facts;
-      listingStatus = { status: 'used', detail: 'Listing matched this address.', photos: facts.photos.slice(0, 6) };
+      listingStatus = { status: 'used', detail: 'Listing matched this address; used for rent and unit count only.' };
     }
   }
 
-  // ---- Unit mix ----
-  const price = a.purchasePrice;
+  // ---- Units and beds (needed to apply rent and utilities) ----
   const listedRent = facts?.monthlyRent ?? null;
-  let unitCount = facts?.units ?? null;
-  let unitsSource: Source = 'listing';
-  let unitsNote = 'Stated in the listing.';
+  const parcel = a.parcel ?? null;
+  let unitCount = parcel?.units ?? facts?.units ?? null;
+  let unitsSource: Source = parcel?.units ? 'verified' : 'listing';
+  let unitsNote = parcel?.units ? `City of St. Louis property record (parcel ${parcel.parcelId}).` : 'Stated in the listing.';
+  if (parcel?.units && facts?.units && facts.units !== parcel.units) {
+    warnings.push(`The listing says ${facts.units} units but the city record says ${parcel.units}. Using the city record.`);
+  }
   if (!unitCount) {
     unitsSource = 'estimate';
     const twoBed = a.fmr?.byBedrooms[2] ?? 0;
     const maxHouse = (a.fmr?.byBedrooms[4] ?? 0) * 1.1;
     if (listedRent && twoBed && listedRent > maxHouse) {
-      // More rent than a single house earns here: estimate units at the area's 2-bed rent.
       unitCount = Math.max(2, Math.round(listedRent / twoBed));
-      unitsNote = `Not stated. The listing’s ${money(listedRent)}/mo is more than a house rents for here, so estimated at ${unitCount} units (rent ÷ HUD 2-bed ${money(twoBed)}).`;
-      warnings.push(`Unit count not stated. Estimated ${unitCount} units from the rent. Check the listing and adjust your read of the results.`);
+      unitsNote = `Not stated. ${money(listedRent)}/mo is more than a house rents for here, so estimated at ${unitCount} units (rent ÷ HUD 2-bed ${money(twoBed)}).`;
+      warnings.push(`Unit count not stated. Estimated ${unitCount} units from the rent.`);
     } else {
       unitCount = 1;
-      unitsNote = 'Not found in the listing. Assumed 1 unit.';
-      warnings.push('Unit count not found. Modeled as 1 unit. Results change a lot if this is multifamily.');
+      unitsNote = 'Not found in the listing. Assumed single-family (1 unit).';
+      warnings.push('Unit count not found. Modeled as single-family. Results change a lot if this is multifamily.');
     }
   }
   add('units', 'Units', String(unitCount), unitsSource, unitsNote);
-  const commercial = unitCount >= MARKET.commercialMinUnits || price >= MARKET.commercialMinPrice;
-
-  const bedsPerUnit = facts?.totalBeds && unitsSource === 'listing' ? Math.max(0, Math.min(4, Math.round(facts.totalBeds / unitCount))) : 2;
-  const bedsSource: Source = facts?.totalBeds ? 'listing' : 'estimate';
-  const bathsPerUnit = facts?.totalBaths ? Math.max(1, Math.round((facts.totalBaths / unitCount) * 2) / 2) : 1;
+  const commercial = unitCount >= MARKET.commercialMinUnits || allIn >= MARKET.commercialMinPrice;
+  const bedsFromListing = !!facts?.totalBeds && unitsSource === 'listing';
+  const bedsPerUnit = bedsFromListing ? Math.max(0, Math.min(4, Math.round(facts!.totalBeds! / unitCount))) : 2;
   add(
     'beds',
     'Bedrooms per unit',
     String(bedsPerUnit),
-    bedsSource,
-    bedsSource === 'listing' ? `Listing total (${facts!.totalBeds}) ÷ units.` : 'Not stated. Assumed 2 bedrooms (a typical rental unit).',
+    bedsFromListing ? 'listing' : 'estimate',
+    bedsFromListing ? `Listing total (${facts!.totalBeds}) ÷ units.` : 'Not stated. Assumed 2 bedrooms.',
   );
 
-  const sqftTotal = facts?.sqft ?? SQFT_BY_BEDS[bedsPerUnit] * unitCount;
-  const sqftSource: Source = facts?.sqft ? 'listing' : 'estimate';
-  add(
-    'sqft',
-    'Building size',
-    `${Math.round(sqftTotal).toLocaleString('en-US')} sq ft`,
-    sqftSource,
-    sqftSource === 'listing' ? 'Stated in the listing.' : `Not stated. Typical ${bedsPerUnit}-bed unit size × units.`,
-  );
-
-  // ---- Rents ----
+  // ---- Rent: listing / rental comps first, HUD benchmark as fallback ----
   const hudPerUnit = a.fmr ? a.fmr.byBedrooms[bedsPerUnit] : 0;
-  const hudLabel = a.fmr
-    ? `HUD Fair Market Rent ${a.fmr.year} for a ${bedsPerUnit}-bed${a.fmr.zipLevel ? ` in ZIP ${a.geo.zip}` : ` in ${a.fmr.areaName}`}`
-    : '';
-  let marketPerUnit = 0;
-  let marketSource: Source = 'estimate';
-  let marketNote = '';
+  let rentPerUnit = 0;
+  let rentSource: Source = 'estimate';
+  let rentNote = '';
   if (listedRent) {
-    const uplifted = (listedRent / unitCount) * (1 + MARKET.rentUplift.value);
-    marketPerUnit = Math.max(uplifted, hudPerUnit);
-    marketNote =
-      hudPerUnit > uplifted
-        ? `${hudLabel}: ${money(hudPerUnit)}. Current rent is below it, so a renovated unit is assumed to reach it.`
-        : `Current rent + 7%. ${MARKET.rentUplift.note}${hudPerUnit ? ` ${hudLabel}: ${money(hudPerUnit)}.` : ''}`;
+    rentPerUnit = listedRent / unitCount;
+    rentSource = 'listing';
+    rentNote = `From the listing: “${facts!.rentBasis}”.${hudPerUnit ? ` HUD benchmark for comparison: ${money(hudPerUnit)}/unit.` : ''}`;
   } else if (hudPerUnit) {
-    marketPerUnit = hudPerUnit;
-    marketNote = `${hudLabel}. HUD sets this at the 40th percentile, including utilities, so it runs conservative.`;
+    rentPerUnit = hudPerUnit;
+    rentNote = `HUD Fair Market Rent ${a.fmr!.year} for a ${bedsPerUnit}-bed${a.fmr!.zipLevel ? ` in ZIP ${a.geo.zip}` : ` in ${a.fmr!.areaName}`}. Conservative (40th percentile); check against your Zillow rental comps.`;
   }
-  const rentKnown = marketPerUnit > 0;
+  const rentKnown = rentPerUnit > 0;
   if (!rentKnown) {
-    marketNote = a.fmrError ?? 'No rent source available for this address.';
-    warnings.push('No rent data found. Income-based results are blank; see the rent needed to hit targets.');
+    rentNote = a.fmrError ?? 'No rent source available for this address.';
+    warnings.push('No rent data found. See the rent this deal needs below.');
   }
-  add('marketRent', 'Stabilized rent per unit', rentKnown ? `${money(marketPerUnit)}/mo` : 'Unknown', marketSource, marketNote);
-
-  const currentPerUnit = listedRent ? listedRent / unitCount : marketPerUnit;
-  const currentSource: Source = listedRent ? 'listing' : 'estimate';
-  add(
-    'currentRent',
-    'Current rent per unit',
-    currentPerUnit > 0 ? `${money(currentPerUnit)}/mo` : 'Unknown',
-    currentSource,
-    listedRent ? `From the listing: “${facts!.rentBasis}”.` : 'No current rent in the listing. Current column assumes stabilized rent.',
-  );
-
+  add('rent', 'Rent per unit', rentKnown ? `${money(rentPerUnit)}/mo` : 'Unknown', rentSource, rentNote);
   const units: Unit[] = Array.from({ length: unitCount }, () => ({
     beds: bedsPerUnit,
-    baths: bathsPerUnit,
-    sqft: sqftTotal / unitCount,
-    currentRent: currentPerUnit,
-    marketRent: marketPerUnit,
+    baths: 1,
+    sqft: 0,
+    currentRent: rentPerUnit,
+    marketRent: rentPerUnit,
   }));
 
-  // ---- Rehab ----
-  const rehab = estimateRehab(`${facts?.description ?? ''} ${facts?.text ?? ''}`, sqftTotal, { occupied: !!listedRent });
-  add(
-    'rehab',
-    'Rehab budget',
-    `${money(rehab.cost)} (range ${money(rehab.low)}–${money(rehab.high)})`,
-    rehab.scope === 'unknown' ? 'default' : 'estimate',
-    rehab.matched ? `${rehab.note} Listing says: “${rehab.matched}”.` : rehab.note,
-  );
-
-  // ---- Taxes ----
-  const rate = commercial ? MARKET.taxRateCommercial.value : (a.taxRate?.rate ?? null);
-  const rateNote = commercial ? MARKET.taxRateCommercial.note : (a.taxRate?.note ?? '');
-  let taxesCurrent: number;
-  let taxSource: Source;
-  let taxNote: string;
-  if (facts?.annualTaxes) {
-    taxesCurrent = facts.annualTaxes;
-    taxSource = 'listing';
-    taxNote = 'Stated in the listing (not verified against the tax record).';
-  } else if (rate) {
-    taxesCurrent = price * rate;
-    taxSource = 'estimate';
-    taxNote = `${rateNote} × purchase price.`;
+  // ---- Expenses: taxes, insurance, utilities, maintenance, vacancy ----
+  const taxRate = commercial ? MARKET.taxRateCommercial.value : (a.taxRate?.rate ?? 0.01);
+  const taxNote = commercial
+    ? MARKET.taxRateCommercial.note
+    : a.taxRate
+      ? a.taxRate.note
+      : 'No local rate available; 1% assumed';
+  const taxes = parcel?.annualTax ?? allIn * taxRate;
+  const insurance = allIn * DEFAULTS.insurancePctOfCoverage.value;
+  const water = unitCount > 1 ? (DEFAULTS.waterSewerTrashPer2Units.value / 2) * unitCount : 0;
+  if (parcel?.annualTax) {
+    add('taxes', 'Property taxes', `${money(taxes)}/yr`, 'verified', `${parcel.taxYear} tax bill from the City of St. Louis Collector of Revenue (parcel ${parcel.parcelId}).`);
+    if (parcel.abated) warnings.push('This parcel has a tax abatement. Taxes will rise when it ends; check the end date.');
   } else {
-    taxesCurrent = price * 0.01;
-    taxSource = 'estimate';
-    taxNote = 'No tax data. Assumed 1% of purchase price.';
+    add('taxes', 'Property taxes', `${money(taxes)}/yr`, 'estimate', `${taxNote}, applied to the all-in cost.`);
   }
-  const taxRateOnPrice = rate ?? 0.01;
-  const taxesStabilized = Math.max(taxesCurrent * (1 + DEFAULTS.taxBumpOnPurchase.value), price * taxRateOnPrice);
-  add('taxesCurrent', 'Property taxes (current)', `${money(taxesCurrent)}/yr`, taxSource, taxNote);
-  add(
-    'taxesStabilized',
-    'Property taxes (after purchase)',
-    `${money(taxesStabilized)}/yr`,
-    'estimate',
-    `Higher of current +10% or purchase price × ${pct(taxRateOnPrice, 2)}. A historical bill is not a forecast.`,
-  );
-
-  // ---- Financing and the remaining defaults ----
-  const loan = commercial ? MARKET.commercialLoan : MARKET.smallLoan;
-  const mgmt = commercial ? MARKET.managementCommercial : DEFAULTS.managementPct;
-  const insurance = (price + rehab.cost) * DEFAULTS.insurancePctOfCoverage.value;
-  const owner =
-    unitCount > 1
-      ? {
-          lawnSnow: DEFAULTS.lawnSnowMonthly.value,
-          waterSewerTrash: (DEFAULTS.waterSewerTrashPer2Units.value / 2) * unitCount,
-          electricGas: 0,
-        }
-      : { lawnSnow: 0, waterSewerTrash: 0, electricGas: 0 };
-
-  add('down', 'Down payment', pct(loan.down, 0), 'default', loan.note);
-  add('rate', 'Interest rate', pct(DEFAULTS.interestRate.value, 1), 'default', DEFAULTS.interestRate.note);
-  add('amort', 'Amortization', `${loan.amortYears} years`, 'default', loan.note);
-  add('closing', 'Closing costs', money(price * DEFAULTS.closingCostPct.value), 'default', DEFAULTS.closingCostPct.note);
-  add('vacancy', 'Vacancy', pct(DEFAULTS.vacancyPct.value, 0), 'default', DEFAULTS.vacancyPct.note);
-  add('maintenance', 'Maintenance', pct(DEFAULTS.maintenancePct.value, 0), 'default', DEFAULTS.maintenancePct.note);
-  add('management', 'Management', pct(mgmt.value, 0), 'default', mgmt.note);
-  add('insurance', 'Insurance', `${money(insurance)}/yr`, 'default', DEFAULTS.insurancePctOfCoverage.note);
+  add('insurance', 'Insurance', `${money(insurance)}/yr`, 'default', 'Insurance ≈ 0.6% of the all-in cost. Get a quote.');
   add(
     'utilities',
-    'Owner-paid utilities',
-    unitCount > 1 ? `${money(owner.waterSewerTrash)}/mo water, sewer, trash · ${money(owner.lawnSnow)}/mo lawn & snow` : '$0 (tenant pays)',
+    'Utilities',
+    unitCount > 1 ? `${money(water)}/mo water, sewer, trash` : '$0 (tenant pays)',
     'default',
     unitCount > 1
-      ? `${DEFAULTS.waterSewerTrashPer2Units.note} Closed St. Louis multifamily deals ran 7–10% of gross rent, which this matches. Tenants pay electric and gas.`
-      : 'On a single-family, the tenant pays all utilities and lawn care.',
+      ? '$75/unit/month for water, sewer and trash. Tenants pay electric and gas (separate meters).'
+      : 'Single-family: the tenant pays all utilities.',
   );
+  add('maintenance', 'Maintenance', pct(DEFAULTS.maintenancePct.value, 1), 'default', DEFAULTS.maintenancePct.note);
+  add('vacancy', 'Vacancy', pct(DEFAULTS.vacancyPct.value, 1), 'default', DEFAULTS.vacancyPct.note);
 
+  // ---- Loan: all-in cost, 30 years at prime ----
+  const rate = DEFAULTS.interestRate.value;
+  add('loan', 'Loan amount', money(allIn), 'user', 'Equal to your all-in cost (100% financed).');
+  add('rate', 'Interest rate', pct(rate, 1), 'default', DEFAULTS.interestRate.note);
+  add('term', 'Loan term', `${LOAN_YEARS} years`, 'default', '30-year mortgage.');
+
+  const owner = { lawnSnow: 0, waterSewerTrash: water, electricGas: 0 };
   const base: DealInputs = {
-    purchasePrice: price,
-    closingCosts: price * DEFAULTS.closingCostPct.value,
-    downPaymentPct: loan.down,
-    interestRate: DEFAULTS.interestRate.value,
-    amortYears: loan.amortYears,
-    rehabCost: rehab.cost,
-    rehabOutOfPocketPct: commercial ? MARKET.commercialLoan.rehabCashPct : DEFAULTS.rehabOutOfPocketPct.value,
-    arv: 0,
+    purchasePrice: allIn,
+    closingCosts: 0,
+    downPaymentPct: 0,
+    interestRate: rate,
+    amortYears: LOAN_YEARS,
+    rehabCost: 0,
+    rehabOutOfPocketPct: 1,
+    arv: allIn,
     units,
     vacancyPct: DEFAULTS.vacancyPct.value,
-    taxesCurrent,
-    taxesStabilized,
+    taxesCurrent: taxes,
+    taxesStabilized: taxes,
     insurance,
-    managementPct: mgmt.value,
+    managementPct: 0,
     maintenancePct: DEFAULTS.maintenancePct.value,
     current: owner,
     stabilized: owner,
     buildingValueRatio: DEFAULTS.buildingValueRatio.value,
     marginalTaxRate: DEFAULTS.marginalTaxRate.value,
     appreciationPct: DEFAULTS.appreciationPct.value,
-    holdYears: DEFAULTS.holdYears.value,
+    holdYears: 1,
   };
 
-  // ---- ARV (income approach; no free sales comps) ----
-  const allIn = price + base.closingCosts + rehab.cost;
-  let arv: number;
-  if (rentKnown) {
-    const stabNoi = analyzeDeal({ ...base, arv: allIn }).stabilized.noi;
-    arv = Math.max(0, Math.round(stabNoi / DEFAULTS.incomeCapRate.value / 1000) * 1000);
-    add(
-      'arv',
-      'After-repair value',
-      money(arv),
-      'estimate',
-      `Income approach: stabilized NOI ÷ ${pct(DEFAULTS.incomeCapRate.value, 0)} cap rate. ${DEFAULTS.incomeCapRate.note}${
-        unitCount <= 4 ? ' Lenders value 1–4 unit properties by sales comps, so treat this as a rough check.' : ''
-      }`,
-    );
-  } else {
-    arv = allIn;
-    add('arv', 'After-repair value', money(arv), 'estimate', 'Rent unknown, so ARV can’t be estimated. Set to all-in cost (no forced appreciation).');
-  }
-  base.arv = arv;
-
-  add('bvr', 'Building share of value', pct(DEFAULTS.buildingValueRatio.value, 0), 'default', DEFAULTS.buildingValueRatio.note);
-  add('taxRate', 'Your tax bracket', pct(DEFAULTS.marginalTaxRate.value, 0), 'default', DEFAULTS.marginalTaxRate.note);
-  add('appreciation', 'Appreciation', `${pct(DEFAULTS.appreciationPct.value, 0)}/yr`, 'default', DEFAULTS.appreciationPct.note);
-
-  // ---- Run ----
   const result = analyzeDeal(base);
+  const s = result.stabilized;
   const links: PriceLinks = {
-    closingCostPct: DEFAULTS.closingCostPct.value,
-    stabilizedTaxRateOnPrice: taxRateOnPrice,
+    closingCostPct: 0,
+    stabilizedTaxRateOnPrice: parcel?.annualTax ? null : taxRate,
     insurancePctOfCoverage: DEFAULTS.insurancePctOfCoverage.value,
-    taxBump: DEFAULTS.taxBumpOnPurchase.value,
+    taxBump: parcel?.annualTax ? 0 : -1, // a real tax bill stays fixed; an estimate scales with the all-in cost
   };
-  const solutions = solve(base, links, TARGETS);
-  const c = checks(result, TARGETS);
+  const sol = solve(base, links, ALL_IN_TARGETS);
+  const c = checks(result, ALL_IN_TARGETS).filter((x) => x.id === 'dscr' || x.id === 'cashflow');
 
-  if (result.stabilized.expenseRatio < 0.3 && rentKnown) {
-    warnings.push(`Expense ratio is ${pct(result.stabilized.expenseRatio)}. Under 30% probably isn’t conservative enough.`);
-  }
+  // ---- Loan options at this amount ----
+  const opt = (id: LoanOption['id'], name: string, years: number, r: number): LoanOption => {
+    const pmt = monthlyPayment(allIn, r, years);
+    return { id, name, detail: `${(r * 100).toFixed(1)}% · ${years} years`, monthlyPayment: pmt, monthlyCashFlow: s.noi / 12 - pmt, dscr: s.noi / (pmt * 12) };
+  };
+  const loanOptions = [
+    opt('base', '30-year mortgage', 30, rate),
+    opt('amort25', '25-year amortization', 25, rate),
+    opt('amort20', '20-year amortization', 20, rate),
+    opt('shock', 'If rates are 1% higher', 30, rate + 0.01),
+  ];
 
-  // ---- Confidence ----
+  // ---- Verdict ----
   const reasons: string[] = [];
   let score = 0;
-  if (unitsSource === 'listing') score++; else reasons.push('Unit count assumed');
-  if (listedRent) score++; else reasons.push(rentKnown ? 'Rent is a HUD benchmark, not actual rent' : 'No rent data');
-  if (sqftSource === 'listing') score++; else reasons.push('Size estimated');
-  if (taxSource !== 'estimate') score++; else reasons.push('Taxes estimated');
-  if (rehab.scope !== 'unknown') score++; else reasons.push('Condition unknown');
-  const confidence = score >= 4 ? 'high' : score >= 2 ? 'medium' : 'low';
-
-  const operating = c.filter((x) => ['dscr', 'cashflow', 'coc'].includes(x.id));
-  const status: Analysis['verdict']['status'] = !rentKnown ? 'rent_unknown' : operating.every((x) => x.pass) ? 'meets' : 'misses';
+  if (unitsSource !== 'estimate') score++; else reasons.push('Unit count assumed');
+  if (listedRent) score++; else reasons.push(rentKnown ? 'Rent is a HUD benchmark, not a rental comp' : 'No rent data');
+  if (bedsFromListing) score++; else reasons.push('Bedrooms assumed');
+  const confidence = score === 3 ? 'high' : score === 2 ? 'medium' : 'low';
+  const status: Analysis['verdict']['status'] = !rentKnown ? 'rent_unknown' : c.every((x) => x.pass) ? 'meets' : 'misses';
   const headline =
     status === 'rent_unknown'
       ? 'Rent data unavailable. Here’s the rent this deal needs.'
       : status === 'meets'
-        ? 'Meets all three cash-flow targets'
-        : `Below target on ${operating.filter((x) => !x.pass).length} of ${operating.length} cash-flow tests`;
+        ? `Cash flows ${money(s.cashFlow / 12)}/mo after expenses and the mortgage`
+        : s.cashFlow < 0
+          ? `Loses ${money(-s.cashFlow / 12)}/mo after expenses and the mortgage`
+          : `Cash flows ${money(s.cashFlow / 12)}/mo, below target`;
 
-  const lineSources: Record<string, Source> = {
-    gpiCurrent: currentSource,
-    gpiStabilized: marketSource,
-    vacancy: 'default',
-    taxesCurrent: taxSource,
-    taxesStabilized: 'estimate',
-    insurance: 'default',
-    management: 'default',
-    maintenance: 'default',
-    utilities: 'default',
-    rehab: rehab.scope === 'unknown' ? 'default' : 'estimate',
-    arv: 'estimate',
-    financing: 'default',
-    purchasePrice: 'user',
-  };
+  const cashNeeded =
+    sol.requiredDownPct === null ? null : Math.max(0, (sol.requiredDownCash ?? 0));
 
   return {
     address: { input: a.inputAddress, matched: a.geo.matchedAddress, county: a.geo.countyName },
-    purchasePrice: price,
+    allInCost: allIn,
     verdict: { status, headline, confidence, confidenceReasons: reasons },
     rentKnown,
-    currentRentKnown: !!listedRent,
+    units: unitCount,
     result,
     checks: c,
-    solutions,
-    rehab,
+    solutions: { maxAllIn: sol.maxPrice, requiredMonthlyRent: sol.requiredMonthlyRent, cashNeeded },
+    loan: { amount: allIn, rate, years: LOAN_YEARS, monthlyPayment: result.acquisition.monthlyPayment },
+    loanOptions,
     assumptions: rows,
     listing: listingStatus,
-    lineSources,
-    financing: analyzeFinancing(base, result, commercial),
+    lineSources: { rent: rentSource, taxes: parcel?.annualTax ? 'verified' : 'estimate', insurance: 'default', utilities: 'default', maintenance: 'default', vacancy: 'default', loan: 'default' },
     valueAdd: rentKnown ? analyzeValueAdd(base, result, DEFAULTS.incomeCapRate.value) : null,
     warnings,
   };

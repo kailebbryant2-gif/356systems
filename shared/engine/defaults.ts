@@ -11,8 +11,8 @@ export const DEFAULTS = {
   interestRate: { value: 0.07, note: 'Prime rate (7% today). Confirm with your lender.' },
   amortYears: { value: 20, note: '20-year amortization, in case the bank won’t give 25.' },
   rehabOutOfPocketPct: { value: 1, note: 'Rehab paid in cash.' },
-  vacancyPct: { value: 0.1, note: '10% vacancy, the way most banks underwrite.' },
-  maintenancePct: { value: 0.1, note: '10% of gross rent set aside for maintenance.' },
+  vacancyPct: { value: 0.075, note: '7.5% vacancy. With maintenance, 15% of gross rent (conservative).' },
+  maintenancePct: { value: 0.075, note: '7.5% of gross rent for maintenance. With vacancy, 15% of gross rent (conservative).' },
   managementPct: { value: 0, note: 'Self-managed (0%). Use 8–10% with a property manager.' },
   insurancePctOfCoverage: {
     value: 0.006,
