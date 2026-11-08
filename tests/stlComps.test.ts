@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { estimateArv, findSubject, normalizeParcelId, MIN_COMPS } from '../shared/sources/stlComps';
+import { estimateArv, findSubject, normalizeParcelId, suggestStlAddresses, MIN_COMPS } from '../shared/sources/stlComps';
 import { resolve, ALL_IN_PCT_OF_ARV } from '../shared/resolve';
 
 describe('ARV from City of St. Louis sales (bundled data)', () => {
+  it('suggests City addresses as you type, whatever the suffix spelling', () => {
+    expect(suggestStlAddresses('2700 Lemp Ave')).toContain('2700 Lemp Av, St. Louis, MO');
+    expect(suggestStlAddresses('3520 wyoming street')).toContain('3520 Wyoming St, St. Louis, MO');
+    expect(suggestStlAddresses('1209 N Market')).toContain('1209 North Market St, St. Louis, MO');
+    expect(suggestStlAddresses('Lemp')).toEqual([]); // needs a house number
+  });
+
   it('normalizes the parcel id shown on the city site', () => {
     expect(normalizeParcelId('1488-9-070.000')).toBe('14889070000');
   });

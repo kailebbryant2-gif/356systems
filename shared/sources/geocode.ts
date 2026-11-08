@@ -66,6 +66,10 @@ async function photon(q: string, signal?: AbortSignal): Promise<any[]> {
 
 /** Photon (OpenStreetMap) address suggestions: free, no key. US results only. */
 export async function suggest(q: string, signal?: AbortSignal): Promise<Suggestion[]> {
+  return suggestPhoton(q, signal);
+}
+
+async function suggestPhoton(q: string, signal?: AbortSignal): Promise<Suggestion[]> {
   const typed = q.match(/^\s*(\d+[A-Za-z]?)\s+(.+)$/);
   // Sequential on purpose: Photon is a shared free service.
   const full = await photon(q, signal);

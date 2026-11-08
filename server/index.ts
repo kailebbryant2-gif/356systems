@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { geocode, suggest } from '../shared/sources/geocode';
 import { getFmr } from '../shared/sources/hud';
 import { fetchStlParcel } from '../shared/sources/stlCity';
-import { estimateArv, findSubject } from '../shared/sources/stlComps';
+import { estimateArv, findSubject, suggestStlAddresses } from '../shared/sources/stlComps';
 import { effectiveTaxRate } from '../shared/sources/taxes';
 import { resolve } from '../shared/resolve';
 
@@ -18,11 +18,12 @@ const withTimeout = (ms: number) => AbortSignal.timeout(ms);
 app.get('/api/suggest', async (req, res) => {
   const q = String(req.query.q ?? '').trim();
   if (q.length < 4 || q.length > 200) return res.json({ suggestions: [] });
-  try {
-    res.json({ suggestions: await suggest(q, withTimeout(9000)) });
-  } catch {
-    res.json({ suggestions: [] });
-  }
+  // St. Louis City parcel addresses first: instant and independent of outside services.
+  const local = suggestStlAddresses(q).map((label) => ({ label }));
+  if (local.length >= 1) return res.json({ suggestions: local });
+  const remote = await suggest(q, withTimeout(6000)).catch(() => []);
+  const seen = new Set(local.map((s) => s.label.toUpperCase()));
+  res.json({ suggestions: [...local, ...remote.filter((s) => !seen.has(s.label.toUpperCase()))].slice(0, 5) });
 });
 
 app.post('/api/analyze', async (req, res) => {
@@ -72,6 +73,9 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(dist));
   app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
 }
+
+// Load the bundled St. Louis data up front so the first request is fast.
+suggestStlAddresses('1 A');
 
 const port = Number(process.env.PORT ?? 3001);
 app.listen(port, () => console.log(`Dealwise API on http://localhost:${port}`));

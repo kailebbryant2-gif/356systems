@@ -58,6 +58,45 @@ export function normalizeParcelId(id: string): string {
   return `${id.replace(/[^\d]/g, '')}0`.slice(0, 11);
 }
 
+/** Typed street suffixes → the city's abbreviations. */
+const SUFFIX: Record<string, string> = {
+  AVE: 'AV', AVENUE: 'AV', STREET: 'ST', STR: 'ST', BOULEVARD: 'BLVD', BLV: 'BLVD', PLACE: 'PL', COURT: 'CT', DRIVE: 'DR',
+  ROAD: 'RD', LANE: 'LA', LN: 'LA', TERRACE: 'TER', NORTH: 'N', SOUTH: 'S', EAST: 'E', WEST: 'W',
+};
+
+function normalizeStreet(q: string): string {
+  return q
+    .split(',')[0]
+    .toUpperCase()
+    .replace(/[.#]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => SUFFIX[t] ?? t)
+    .join(' ');
+}
+
+const title = (s: string) => s.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\b(\d+)(St|Nd|Rd|Th)\b/g, (_, n, x) => n + x.toLowerCase());
+
+let normIndex: [string, string][] | null = null;
+function normalizedIndex() {
+  normIndex ??= [...load().byAddr.keys()].map((a) => [normalizeStreet(a), a] as [string, string]);
+  return normIndex;
+}
+
+/** Instant suggestions from the City of St. Louis parcel address list (no outside service). */
+export function suggestStlAddresses(q: string, limit = 5): string[] {
+  const key = normalizeStreet(q);
+  if (!/^\d+\s+\S/.test(key)) return [];
+  const out: string[] = [];
+  for (const [norm, addr] of normalizedIndex()) {
+    if (norm.startsWith(key)) {
+      out.push(`${title(addr)}, St. Louis, MO`);
+      if (out.length >= limit) break;
+    }
+  }
+  return out.sort((a, b) => a.length - b.length);
+}
+
 export function findSubject(opts: { parcelId?: string | null; street?: string }): Subject | null {
   const d = load();
   let pid = opts.parcelId ? normalizeParcelId(opts.parcelId) : null;
