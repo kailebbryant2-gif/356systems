@@ -24,6 +24,8 @@ export interface Subject {
   units: number;
   area: number;
   yearBuilt: number | null;
+  /** City of St. Louis neighborhood code (1–79). */
+  nbhd: string;
 }
 
 export interface ArvEstimate {
@@ -105,8 +107,8 @@ export function findSubject(opts: { parcelId?: string | null; street?: string })
     pid = d.byAddr.get(key) ?? null;
   }
   if (!pid || !d.parcels[pid]) return null;
-  const [address, , , units, area, yearBuilt] = d.parcels[pid];
-  return { parcelId: pid, address, units, area, yearBuilt };
+  const [address, , nbhd, units, area, yearBuilt] = d.parcels[pid];
+  return { parcelId: pid, address, units, area, yearBuilt, nbhd };
 }
 
 const quantile = (xs: number[], q: number) => {

@@ -8,6 +8,7 @@ import { fetchStlParcel } from '../shared/sources/stlCity';
 import { estimateArv, findSubject, suggestStlAddresses } from '../shared/sources/stlComps';
 import { effectiveTaxRate } from '../shared/sources/taxes';
 import { resolve } from '../shared/resolve';
+import { localRent } from '../shared/rents';
 
 const app = express();
 app.disable('x-powered-by');
@@ -54,14 +55,15 @@ app.post('/api/analyze', async (req, res) => {
     // ARV from City sales records (St. Louis City only).
     let arvNote: string | null = null;
     let arv = null;
+    const subject = inStlCity ? findSubject({ parcelId: parcel?.parcelId, street }) : null;
     if (inStlCity) {
-      const subject = findSubject({ parcelId: parcel?.parcelId, street });
       arv = subject ? estimateArv(subject) : null;
       if (!arv) arvNote = subject ? 'Not enough recent sales of similar properties nearby to estimate ARV.' : 'Property not found in the city parcel records, so no ARV.';
     } else {
       arvNote = `ARV comes from City of St. Louis sales records, so it isn’t available for ${geo.countyName || 'this area'}.`;
     }
-    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel, arv, arvNote }));
+    const rent = localRent({ inStlCity, cityNbhd: subject?.nbhd, zip: geo.zip });
+    res.json(resolve({ inputAddress: address, geo, allInCost, listing: null, fmr, fmrError, taxRate, parcel, arv, arvNote, localRent: rent }));
   } catch (e) {
     console.error(`[${ref}]`, e);
     res.status(502).json({ error: 'A data source didn’t respond. Please try again in a minute.', ref });

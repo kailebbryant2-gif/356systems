@@ -9,6 +9,7 @@ import { analyzeValueAdd, type ValueAdd } from './valueAdd';
 import type { TaxRate } from './sources/taxes';
 import type { StlParcel } from './sources/stlCity';
 import type { ArvEstimate } from './sources/stlComps';
+import type { LocalRent } from './rents';
 
 /**
  * All-in model: the student brings an all-in cost (purchase + rehab + closing, from the
@@ -82,6 +83,8 @@ export interface ResolveArgs {
   arv?: ArvEstimate | null;
   /** Why there is no ARV, when there isn't one. */
   arvNote?: string | null;
+  /** Local St. Louis rent rule of thumb for this area, if covered. */
+  localRent?: LocalRent | null;
 }
 
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
@@ -151,8 +154,10 @@ export function resolve(a: ResolveArgs): Analysis {
     bedsFromListing ? `Listing total (${facts!.totalBeds}) ÷ units.` : 'Not stated. Assumed 2 bedrooms.',
   );
 
-  // ---- Rent: listing / rental comps first, HUD benchmark as fallback ----
+  // ---- Rent: listing first, then the local St. Louis rule of thumb, then the HUD benchmark ----
   const hudPerUnit = a.fmr ? a.fmr.byBedrooms[bedsPerUnit] : 0;
+  const localBeds = Math.min(Math.max(bedsPerUnit, 1), 4) as 1 | 2 | 3 | 4;
+  const localPerUnit = a.localRent?.byBedrooms[localBeds] ?? 0;
   let rentPerUnit = 0;
   let rentSource: Source = 'estimate';
   let rentNote = '';
@@ -160,9 +165,14 @@ export function resolve(a: ResolveArgs): Analysis {
     rentPerUnit = listedRent / unitCount;
     rentSource = 'listing';
     rentNote = `From the listing: “${facts!.rentBasis}”.${hudPerUnit ? ` HUD benchmark for comparison: ${money(hudPerUnit)}/unit.` : ''}`;
+  } else if (localPerUnit) {
+    rentPerUnit = localPerUnit;
+    rentSource = 'default';
+    const b = a.localRent!.byBedrooms;
+    rentNote = `${a.localRent!.note}: 1-bed $${b[1]}, 2-bed $${b[2]}, 3-bed $${b[3]}, 4-bed $${b[4]}. General guide; real rental comps are better.${hudPerUnit ? ` HUD benchmark: ${money(hudPerUnit)}.` : ''}`;
   } else if (hudPerUnit) {
     rentPerUnit = hudPerUnit;
-    rentNote = `HUD Fair Market Rent ${a.fmr!.year} for a ${bedsPerUnit}-bed${a.fmr!.zipLevel ? ` in ZIP ${a.geo.zip}` : ` in ${a.fmr!.areaName}`}. Conservative (40th percentile); check against your Zillow rental comps.`;
+    rentNote = `HUD Fair Market Rent ${a.fmr!.year} for a ${bedsPerUnit}-bed${a.fmr!.zipLevel ? ` in ZIP ${a.geo.zip}` : ` in ${a.fmr!.areaName}`}. Conservative (40th percentile); check against rental comps.`;
   }
   const rentKnown = rentPerUnit > 0;
   if (!rentKnown) {
@@ -273,7 +283,7 @@ export function resolve(a: ResolveArgs): Analysis {
   const reasons: string[] = [];
   let score = 0;
   if (unitsSource !== 'estimate') score++; else reasons.push('Unit count assumed');
-  if (listedRent) score++; else reasons.push(rentKnown ? 'Rent is a HUD benchmark, not a rental comp' : 'No rent data');
+  if (listedRent) score++; else reasons.push(!rentKnown ? 'No rent data' : localPerUnit ? 'Rent is a local rule of thumb, not a rental comp' : 'Rent is a HUD benchmark, not a rental comp');
   if (bedsFromListing) score++; else reasons.push('Bedrooms assumed');
   const confidence = score === 3 ? 'high' : score === 2 ? 'medium' : 'low';
   const status: Analysis['verdict']['status'] = !rentKnown ? 'rent_unknown' : c.every((x) => x.pass) ? 'meets' : 'misses';
