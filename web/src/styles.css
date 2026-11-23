@@ -370,3 +370,5 @@ body {
 }
 
 .miles { color: var(--faint); font-size: 12px; }
+.solve-2 { grid-template-columns: 1fr; }
+@media (min-width: 680px) { .solve-2 { grid-template-columns: repeat(2, 1fr); } }

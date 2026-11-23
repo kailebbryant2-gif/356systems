@@ -411,6 +411,7 @@ function RentBreakdown({ a }: { a: Analysis }) {
 
 function MakeItWork({ a }: { a: Analysis }) {
   const sol = a.solutions;
+  if (!a.rentKnown) return null;
   const rent = a.result.stabilized.grossPotentialIncome / 12;
   const tiles = [
     {
@@ -422,14 +423,6 @@ function MakeItWork({ a }: { a: Analysis }) {
           ? `Room to spare: still works up to ${money(sol.maxAllIn)} all-in.`
           : `${money(a.allInCost - sol.maxAllIn)} less than your all-in cost.`
         : 'No all-in cost clears both targets at this rent.',
-    },
-    {
-      icon: <IconHome />,
-      title: 'Rent it needs',
-      value: sol.requiredMonthlyRent ? money(sol.requiredMonthlyRent) : '—',
-      text: sol.requiredMonthlyRent
-        ? `${money(sol.requiredMonthlyRent / a.units)}/unit${a.rentKnown ? ` vs ${money(rent / a.units)} modeled` : ''}. Check rental comps.`
-        : 'Not solvable at this all-in cost.',
     },
     {
       icon: <IconBank />,
@@ -447,9 +440,9 @@ function MakeItWork({ a }: { a: Analysis }) {
     <section className="reveal" style={reveal(6)}>
       <div className="section-title">
         <h3>What would make it work</h3>
-        <p className="muted small">Math thresholds under these assumptions, not what a seller or lender will accept.</p>
+        <p className="muted small">At the estimated rent of {money(rent)}/mo. Math thresholds, not what a seller or lender will accept.</p>
       </div>
-      <div className="solve-grid solve-3">
+      <div className="solve-grid solve-2">
         {tiles.map((t) => (
           <div key={t.title} className="solve-tile">
             <span className="solve-icon">{t.icon}</span>

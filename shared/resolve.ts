@@ -239,7 +239,7 @@ export function resolve(a: ResolveArgs): Analysis {
   const rentKnown = rentPerUnit > 0;
   if (!rentKnown) {
     rentNote = a.fmrError ?? 'No rent source available for this address.';
-    warnings.push('No rent data found. See the rent this deal needs below.');
+    warnings.push('No rent data found for this address, so cash flow can’t be estimated.');
   }
   add('rent', 'Rent per unit', rentKnown ? `${money(rentPerUnit)}/mo` : 'Unknown', rentSource, rentNote);
   const units: Unit[] = Array.from({ length: unitCount }, () => ({
@@ -365,7 +365,7 @@ export function resolve(a: ResolveArgs): Analysis {
   const status: Analysis['verdict']['status'] = !rentKnown ? 'rent_unknown' : c.every((x) => x.pass) ? 'meets' : 'misses';
   const headline =
     status === 'rent_unknown'
-      ? 'Rent data unavailable. Here’s the rent this deal needs.'
+      ? 'Rent data unavailable for this address.'
       : status === 'meets'
         ? `Cash flows ${money(s.cashFlow / 12)}/mo after expenses and the mortgage`
         : s.cashFlow < 0
