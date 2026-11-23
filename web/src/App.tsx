@@ -163,9 +163,6 @@ function Verdict({ a }: { a: Analysis }) {
         <div className="verdict-text">
           <div className="verdict-top">
             <span className={`badge badge-${s}`}>{s === 'meets' ? 'Meets targets' : s === 'misses' ? 'Below targets' : 'Needs rent data'}</span>
-            <span className={`confidence confidence-${a.verdict.confidence}`} title={a.verdict.confidenceReasons.join(' · ')}>
-              {a.verdict.confidence} confidence
-            </span>
           </div>
           <h2>{a.verdict.headline}</h2>
           <p className="muted">
@@ -185,9 +182,6 @@ function Verdict({ a }: { a: Analysis }) {
           </div>
         ))}
       </div>
-      {a.verdict.confidenceReasons.length > 0 && (
-        <p className="fine">Confidence is {a.verdict.confidence} because: {a.verdict.confidenceReasons.join(' · ')}.</p>
-      )}
     </section>
   );
 }
